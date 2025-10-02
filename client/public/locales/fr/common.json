@@ -1,0 +1,21 @@
+{
+  "title": "ListSnapper - Gestion Intelligente de Codes QR",
+  "subtitle": "Créez, Suivez et Gérez les Codes QR Comme Jamais Auparavant",
+  "description": "Codes QR dynamiques avec analyses puissantes, image de marque personnalisée et commande transparente de produits physiques. Tout dans une belle plateforme.",
+  "get_started": "Commencer",
+  "sign_up": "S'inscrire",
+  "log_in": "Se Connecter",
+  "dashboard": "Tableau de Bord",
+  "pricing": "Tarification",
+  "analytics": "Analyses",
+  "orders": "Commandes",
+  "settings": "Paramètres",
+  "create_qr": "Créer un Code QR",
+  "free": "GRATUIT",
+  "standard": "STANDARD",
+  "pro": "PRO",
+  "features": "Fonctionnalités",
+  "qr_codes": "Codes QR",
+  "scans": "Numérisations",
+  "analytics_dashboard": "Tableau de Bord d'Analyses"
+}
