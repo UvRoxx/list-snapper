@@ -1,0 +1,358 @@
+# ListSnapper - Replit Core 3 Agent Build Instructions
+
+## Project Overview
+Build a QR code management SaaS application called **ListSnapper** that allows users to create dynamic QR codes, track analytics, and order physical products (stickers/yard signs).
+
+## Core Requirements
+
+### Technology Stack
+- **Frontend**: React 18 with Vite
+- **Backend**: Express.js with TypeScript
+- **Database**: PostgreSQL with Prisma ORM
+- **Payment**: Stripe for subscriptions and one-time payments
+- **Styling**: Tailwind CSS
+- **Languages**: English and French (use i18next)
+- **Hosting**: Deploy on Replit
+
+### Design Theme
+- **Primary Color**: Mint green (#22c55e as base)
+- **Color Scheme**: Mint green, white, and dark theme support
+- **Style**: Modern, clean, glassmorphism effects
+- **Font**: Inter font family
+- **UI Components**: Use shadcn/ui or similar modern component library
+
+## Feature Specifications
+
+### 1. Authentication System
+- User registration with email/password
+- Login with JWT tokens
+- Password reset via email
+- Session management
+- Protected routes
+
+### 2. Subscription Tiers (3 Plans)
+Create three subscription tiers with Stripe:
+
+**FREE Plan ($0/month)**
+- 5 QR codes maximum
+- Basic features only
+- No analytics
+- Email support
+
+**STANDARD Plan ($4.99/month)**
+- 50 QR codes maximum
+- Full analytics dashboard
+- Custom QR design options
+- Priority support
+
+**PRO Plan ($9.99/month)**
+- Unlimited QR codes
+- Advanced analytics
+- API access
+- White-label options
+- Dedicated support
+
+### 3. QR Code Management
+- Create QR codes with custom names
+- Generate unique short codes (8 characters)
+- Edit destination URLs without changing QR code
+- Activate/deactivate QR codes
+- Custom design options (colors, logo for paid plans)
+- Download QR code images in multiple formats
+
+### 4. Analytics Dashboard
+For STANDARD and PRO users only:
+- Total scans count
+- Scans over time (daily/weekly/monthly charts)
+- Geographic data (city, country breakdown)
+- Device type analytics (mobile, desktop, tablet)
+- Browser and OS statistics
+- Unique vs total scans
+- Peak scanning times
+- Use Recharts or Chart.js for visualizations
+
+### 5. Order System
+Physical product ordering with Printify integration:
+
+**Stickers**
+- Sizes: Small (1"x1"), Medium (2"x2"), Large (3"x3")
+- Quantity-based pricing (bulk discounts)
+- Waterproof material
+
+**Yard Signs**
+- Size: 18"x24"
+- Weather-resistant material
+- Wire stake included
+
+**Order Flow:**
+1. User selects QR code
+2. Chooses product type and options
+3. Enters shipping information
+4. Processes payment via Stripe
+5. Order sent to Printify API
+6. Track order status
+
+### 6. Public QR Redirect System
+- Create public endpoint: `/r/:shortCode`
+- Track each scan with metadata
+- Record: IP, location, device, browser, timestamp
+- Increment scan counter
+- Redirect to destination URL
+
+## Database Schema
+
+### Required Tables
+1. **Users** - authentication and profile
+2. **MembershipTiers** - subscription plan definitions
+3. **UserMemberships** - user subscription status
+4. **QRCodes** - QR code data
+5. **QRCodeScans** - scan tracking data
+6. **Orders** - product orders
+7. **OrderStatusHistory** - order tracking
+8. **PaymentMethods** - saved payment methods
+
+## API Endpoints Structure
+
+### Authentication
+- POST `/api/auth/register`
+- POST `/api/auth/login`
+- POST `/api/auth/reset-password`
+- GET `/api/auth/verify-token`
+
+### QR Codes
+- GET `/api/qr-codes` (list all)
+- POST `/api/qr-codes` (create)
+- PUT `/api/qr-codes/:id` (update)
+- DELETE `/api/qr-codes/:id` (delete)
+- GET `/api/qr-codes/:id/analytics` (get analytics)
+- GET `/api/qr-codes/:id/download` (download image)
+
+### Subscriptions
+- GET `/api/subscriptions/tiers`
+- POST `/api/subscriptions/create-checkout`
+- POST `/api/subscriptions/cancel`
+- GET `/api/subscriptions/status`
+
+### Orders
+- POST `/api/orders/calculate-price`
+- POST `/api/orders/create`
+- GET `/api/orders` (list user orders)
+- GET `/api/orders/:id` (order details)
+
+### Webhooks
+- POST `/api/webhooks/stripe` (Stripe events)
+- POST `/api/webhooks/printify` (Order updates)
+
+### Public
+- GET `/r/:shortCode` (QR redirect endpoint)
+
+## Frontend Pages
+
+### Public Pages
+1. **Landing Page** - marketing site with features
+2. **Pricing Page** - 3 subscription tiers display
+3. **Login/Register Pages** - authentication forms
+4. **Password Reset** - reset flow
+
+### Protected Pages (Require Login)
+1. **Dashboard** - QR codes list with stats
+2. **QR Code Details** - individual QR management
+3. **Analytics** - charts and metrics (paid plans)
+4. **Create QR** - new QR code form
+5. **Orders** - order history and tracking
+6. **Account Settings** - profile and subscription
+7. **Checkout** - Stripe payment flow
+
+## Integration Requirements
+
+### Stripe Integration
+1. Set up Stripe products for 3 subscription tiers
+2. Implement Stripe Checkout for subscriptions
+3. Handle webhooks for subscription events
+4. Process one-time payments for physical products
+5. Store customer IDs and subscription status
+
+### Printify Integration
+1. Set up Printify API connection
+2. Create product templates for stickers and yard signs
+3. Upload QR code designs programmatically
+4. Submit orders via API
+5. Track fulfillment status
+6. Handle shipping calculations
+
+## UI/UX Requirements
+
+### Responsive Design
+- Mobile-first approach
+- Breakpoints: mobile, tablet, desktop
+- Touch-friendly interfaces
+- Progressive Web App capabilities
+
+### Theme System
+- Light/dark mode toggle
+- Mint green accent colors
+- Clean, modern interface
+- Smooth transitions and animations
+- Loading states for all async operations
+
+### Internationalization
+- English and French languages
+- Language switcher in header
+- Translated: UI text, error messages, emails
+- Locale-based number and date formatting
+
+## Security Requirements
+
+1. **Authentication**
+   - Bcrypt password hashing
+   - JWT tokens with expiration
+   - Secure HTTP-only cookies option
+   - Rate limiting on auth endpoints
+
+2. **API Security**
+   - CORS configuration
+   - Request validation
+   - SQL injection prevention (use Prisma)
+   - XSS protection
+
+3. **Payment Security**
+   - PCI compliance via Stripe
+   - No credit card storage
+   - Secure webhook validation
+
+## Performance Targets
+
+- Page load time: < 2 seconds
+- API response time: < 500ms
+- Support 1000+ concurrent users
+- Database query optimization
+- CDN for static assets
+- Image optimization for QR codes
+
+## Development Steps for Replit Agent
+
+### Phase 1: Setup (Day 1)
+1. Initialize Express backend with TypeScript
+2. Set up React frontend with Vite
+3. Configure PostgreSQL database
+4. Install Prisma and create schema
+5. Set up environment variables
+6. Configure Tailwind CSS with mint theme
+
+### Phase 2: Authentication (Day 2)
+1. Implement user registration/login
+2. Set up JWT authentication
+3. Create protected routes
+4. Add password reset flow
+5. Build auth UI components
+
+### Phase 3: QR Code Core (Days 3-4)
+1. Create QR code CRUD operations
+2. Implement QR code generation
+3. Build redirect system with tracking
+4. Create dashboard UI
+5. Add search and filtering
+
+### Phase 4: Subscription System (Days 5-6)
+1. Set up Stripe products
+2. Implement checkout flow
+3. Handle subscription webhooks
+4. Build pricing page
+5. Add subscription management UI
+
+### Phase 5: Analytics (Day 7)
+1. Implement scan tracking
+2. Create analytics aggregation
+3. Build chart components
+4. Add export functionality
+5. Create analytics dashboard
+
+### Phase 6: E-commerce (Days 8-9)
+1. Integrate Printify API
+2. Create product selection UI
+3. Implement order flow
+4. Add shipping calculator
+5. Build order tracking
+
+### Phase 7: Internationalization (Day 10)
+1. Set up i18next
+2. Create translation files
+3. Add language switcher
+4. Translate all UI text
+
+### Phase 8: Polish & Deploy (Days 11-12)
+1. Add loading states
+2. Implement error handling
+3. Optimize performance
+4. Set up monitoring
+5. Deploy to Replit
+6. Configure custom domain
+
+## Testing Requirements
+
+1. Unit tests for critical functions
+2. Integration tests for API endpoints
+3. E2E tests for user flows
+4. Payment flow testing with Stripe test mode
+5. Cross-browser testing
+6. Mobile responsive testing
+
+## Environment Variables Needed
+
+```
+# Database
+DATABASE_URL=postgresql://...
+
+# Authentication
+JWT_SECRET=...
+SESSION_SECRET=...
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PUBLISHABLE_KEY=pk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Printify
+PRINTIFY_ACCESS_TOKEN=...
+PRINTIFY_SHOP_ID=...
+
+# Email
+SMTP_HOST=...
+SMTP_PORT=...
+SMTP_USER=...
+SMTP_PASS=...
+
+# App URLs
+FRONTEND_URL=http://localhost:3000
+API_URL=http://localhost:3001
+
+# Feature Flags
+ENABLE_ANALYTICS=true
+ENABLE_ORDERS=true
+```
+
+## Success Criteria
+
+The application is complete when:
+1. Users can register and manage subscriptions
+2. QR codes can be created, edited, and tracked
+3. Analytics show accurate scan data
+4. Orders integrate with Printify successfully
+5. Payment processing works via Stripe
+6. UI is responsive and supports 2 languages
+7. All three subscription tiers function correctly
+8. The mint/white/dark theme is consistently applied
+9. Performance meets specified targets
+10. Security best practices are implemented
+
+## Notes for Replit Agent
+
+- Use Replit's PostgreSQL database
+- Leverage Replit Secrets for environment variables
+- Use Replit's built-in deployment features
+- Implement hot-reloading for development
+- Use Replit's DNS for custom domain setup
+- Take advantage of Replit's SSL certificates
+- Utilize Replit's monitoring tools
+
+Build this application following modern best practices, ensuring it's production-ready, scalable, and provides an excellent user experience. The focus should be on creating a professional SaaS product that can compete with existing QR code management solutions.
