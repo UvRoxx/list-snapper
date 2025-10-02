@@ -85,7 +85,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Create default FREE membership
-      await storage.createUserMembership({
+      const membership = await storage.createUserMembership({
         userId: user.id,
         tierName: 'FREE',
         isActive: true,
@@ -103,7 +103,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           id: user.id, 
           email: user.email, 
           firstName: user.firstName,
-          lastName: user.lastName 
+          lastName: user.lastName,
+          membership: {
+            tierName: membership.tierName,
+            isActive: membership.isActive,
+            expiresAt: membership.expiresAt
+          }
         } 
       });
     } catch (error: any) {
@@ -129,13 +134,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         expiresIn: '24h'
       });
 
+      // Get user's membership
+      const membership = await storage.getUserMembership(user.id);
+
       res.json({ 
         token, 
         user: { 
           id: user.id, 
           email: user.email, 
           firstName: user.firstName,
-          lastName: user.lastName 
+          lastName: user.lastName,
+          membership: membership ? {
+            tierName: membership.tierName,
+            isActive: membership.isActive,
+            expiresAt: membership.expiresAt
+          } : null
         } 
       });
     } catch (error: any) {
@@ -150,12 +163,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
+      // Get user's membership
+      const membership = await storage.getUserMembership(req.user.userId);
+
       res.json({ 
         id: user.id, 
         email: user.email, 
         firstName: user.firstName,
         lastName: user.lastName,
-        company: user.company
+        company: user.company,
+        membership: membership ? {
+          tierName: membership.tierName,
+          isActive: membership.isActive,
+          expiresAt: membership.expiresAt
+        } : null
       });
     } catch (error: any) {
       res.status(400).json({ message: error.message });

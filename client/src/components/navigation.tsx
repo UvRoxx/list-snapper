@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/hooks/use-auth";
 import { QrCode, Moon, Sun, Globe } from "lucide-react";
@@ -16,10 +17,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useTranslation } from "react-i18next";
+import { useState, useEffect } from "react";
 
 export function Navigation() {
   const { theme, setTheme } = useTheme();
   const { user, logout } = useAuth();
+  const { i18n } = useTranslation();
+  const [language, setLanguage] = useState(() => 
+    localStorage.getItem('language') || 'en'
+  );
+
+  useEffect(() => {
+    i18n.changeLanguage(language);
+    localStorage.setItem('language', language);
+  }, [language, i18n]);
+
+  const handleLanguageChange = (value: string) => {
+    setLanguage(value);
+  };
 
   return (
     <nav className="sticky top-0 z-50 glass-effect border-b border-border">
@@ -57,7 +73,7 @@ export function Navigation() {
           </div>
           
           <div className="flex items-center space-x-4">
-            <Select defaultValue="en">
+            <Select value={language} onValueChange={handleLanguageChange}>
               <SelectTrigger className="w-16" data-testid="select-language">
                 <Globe className="h-4 w-4" />
               </SelectTrigger>
@@ -79,24 +95,35 @@ export function Navigation() {
             </Button>
 
             {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" data-testid="button-user-menu">
-                    {user.firstName?.[0] || user.email[0]}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild>
-                    <Link href="/dashboard">Dashboard</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/settings">Settings</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={logout}>
-                    Logout
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <>
+                {user.membership && (
+                  <Badge 
+                    variant={user.membership.tierName === 'PRO' ? 'default' : user.membership.tierName === 'STANDARD' ? 'secondary' : 'outline'}
+                    className="hidden sm:flex"
+                    data-testid="badge-membership-tier"
+                  >
+                    {user.membership.tierName}
+                  </Badge>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" data-testid="button-user-menu">
+                      {user.firstName?.[0] || user.email[0]}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard">Dashboard</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/settings">Settings</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={logout}>
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
             ) : (
               <>
                 <Link href="/login">

@@ -9,6 +9,11 @@ interface User {
   firstName?: string;
   lastName?: string;
   company?: string;
+  membership?: {
+    tierName: 'FREE' | 'STANDARD' | 'PRO';
+    isActive: boolean;
+    expiresAt?: string;
+  } | null;
 }
 
 interface AuthContextType {
@@ -31,7 +36,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: user, isLoading } = useQuery({
     queryKey: ['/api/auth/me'],
     enabled: !!token,
-    staleTime: Infinity,
     retry: false,
   });
 
@@ -44,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('auth-token', data.token);
       setToken(data.token);
       queryClient.setQueryData(['/api/auth/me'], data.user);
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       setLocation('/dashboard');
     },
   });
@@ -57,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('auth-token', data.token);
       setToken(data.token);
       queryClient.setQueryData(['/api/auth/me'], data.user);
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       setLocation('/dashboard');
     },
   });
