@@ -172,6 +172,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/qr-codes/:id", authenticateToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const qrCode = await storage.getQrCode(id);
+      
+      if (!qrCode) {
+        return res.status(404).json({ message: "QR code not found" });
+      }
+      
+      // Verify the QR code belongs to the authenticated user
+      if (qrCode.userId !== req.user.userId) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+      
+      res.json(qrCode);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   app.post("/api/qr-codes", authenticateToken, async (req: any, res) => {
     try {
       const qrCodeData = insertQrCodeSchema.parse(req.body);

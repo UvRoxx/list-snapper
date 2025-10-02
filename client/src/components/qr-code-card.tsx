@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, Download, MoreVertical, Edit, Trash, BarChart3, Calendar } from "lucide-react";
+import { Eye, Download, MoreVertical, Edit, Trash, BarChart3, Calendar, ExternalLink } from "lucide-react";
 
 interface QrCodeCardProps {
   qrCode: {
@@ -131,10 +132,12 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
         </div>
 
         <div className="flex items-center space-x-2">
-          <Button variant="secondary" className="flex-1" data-testid="button-view-qr">
-            <Eye className="h-4 w-4 mr-2" />
-            View
-          </Button>
+          <Link href={`/qr/${qrCode.id}`} className="flex-1">
+            <Button variant="secondary" className="w-full" data-testid="button-view-qr">
+              <Eye className="h-4 w-4 mr-2" />
+              View Details
+            </Button>
+          </Link>
           <Button 
             variant="outline" 
             size="icon"
