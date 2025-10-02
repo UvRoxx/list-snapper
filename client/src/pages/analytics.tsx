@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Navigation } from "@/components/navigation";
 import { ProtectedRoute } from "@/components/protected-route";
@@ -11,7 +12,6 @@ import {
   BarChart3, 
   Clock, 
   ArrowUp, 
-  ArrowDown,
   Download,
   Smartphone,
   Monitor,
@@ -20,16 +20,82 @@ import {
 
 export default function Analytics() {
   const { user } = useAuth();
+  const [timeRange, setTimeRange] = useState("7days");
   
-  const { data: qrCodes = [] } = useQuery<any[]>({
-    queryKey: ['/api/qr-codes'],
+  const { data: analytics, isLoading } = useQuery({
+    queryKey: ['/api/analytics', { timeRange }],
     enabled: !!user
   });
 
-  // Calculate aggregate stats from QR codes
-  const totalScans = qrCodes.reduce((acc: number, qr: any) => acc + (qr.scanCount || 0), 0);
-  const uniqueVisitors = Math.round(totalScans * 0.65); // Estimate unique visitors
-  const avgDaily = Math.round(totalScans / 30); // Estimate daily average
+  if (isLoading) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-muted/30">
+          <Navigation />
+          <div className="flex items-center justify-center min-h-[50vh]">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  const {
+    totalScans = 0,
+    uniqueVisitors = 0,
+    avgDailyScans = 0,
+    peakHour = 'N/A',
+    deviceBreakdown = {},
+    browserBreakdown = {},
+    osBreakdown = {},
+    locationBreakdown = {},
+    scanTimeSeries = []
+  } = analytics || {};
+
+  // Calculate percentages for device breakdown
+  const deviceTotal = Object.values(deviceBreakdown).reduce((sum: number, val: any) => sum + val, 0);
+  const devicePercentages = Object.entries(deviceBreakdown).map(([device, count]) => ({
+    device,
+    count: count as number,
+    percentage: deviceTotal > 0 ? Math.round((count as number / deviceTotal) * 100) : 0
+  }));
+
+  // Get top locations
+  const topLocations = Object.entries(locationBreakdown)
+    .map(([country, count]) => ({ country, count: count as number }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  // Get top browsers
+  const topBrowsers = Object.entries(browserBreakdown)
+    .map(([browser, count]) => ({ browser, count: count as number }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 4);
+
+  // Get top OS
+  const topOS = Object.entries(osBreakdown)
+    .map(([os, count]) => ({ os, count: count as number }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 4);
+
+  // Calculate browser percentages
+  const browserTotal = topBrowsers.reduce((sum, b) => sum + b.count, 0);
+  const osTotal = topOS.reduce((sum, o) => sum + o.count, 0);
+  const locationTotal = topLocations.reduce((sum, l) => sum + l.count, 0);
+
+  // Get country emoji flags (simplified)
+  const getCountryEmoji = (country: string) => {
+    const emojiMap: Record<string, string> = {
+      'United States': '🇺🇸',
+      'United Kingdom': '🇬🇧',
+      'Canada': '🇨🇦',
+      'Australia': '🇦🇺',
+      'Germany': '🇩🇪',
+      'France': '🇫🇷',
+      'Unknown': '🌍'
+    };
+    return emojiMap[country] || '🌍';
+  };
 
   return (
     <ProtectedRoute>
@@ -44,7 +110,7 @@ export default function Analytics() {
                 <p className="text-muted-foreground">Track performance and insights</p>
               </div>
               <div className="mt-4 md:mt-0 flex items-center space-x-3">
-                <Select defaultValue="7days">
+                <Select value={timeRange} onValueChange={setTimeRange}>
                   <SelectTrigger data-testid="select-time-period">
                     <SelectValue placeholder="Last 7 days" />
                   </SelectTrigger>
@@ -76,10 +142,8 @@ export default function Analytics() {
                   </div>
                 </div>
                 <div className="text-3xl font-bold mb-2">{totalScans.toLocaleString()}</div>
-                <div className="flex items-center text-sm">
-                  <ArrowUp className="h-4 w-4 text-chart-4 mr-1" />
-                  <span className="text-chart-4">23.5%</span>
-                  <span className="text-muted-foreground ml-1">vs last period</span>
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <span>Total scan count</span>
                 </div>
               </CardContent>
             </Card>
@@ -93,10 +157,8 @@ export default function Analytics() {
                   </div>
                 </div>
                 <div className="text-3xl font-bold mb-2">{uniqueVisitors.toLocaleString()}</div>
-                <div className="flex items-center text-sm">
-                  <ArrowUp className="h-4 w-4 text-chart-4 mr-1" />
-                  <span className="text-chart-4">18.2%</span>
-                  <span className="text-muted-foreground ml-1">vs last period</span>
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <span>Unique IP addresses</span>
                 </div>
               </CardContent>
             </Card>
@@ -109,11 +171,9 @@ export default function Analytics() {
                     <BarChart3 className="h-5 w-5 text-chart-3" />
                   </div>
                 </div>
-                <div className="text-3xl font-bold mb-2">{avgDaily.toLocaleString()}</div>
-                <div className="flex items-center text-sm">
-                  <ArrowDown className="h-4 w-4 text-destructive mr-1" />
-                  <span className="text-destructive">5.3%</span>
-                  <span className="text-muted-foreground ml-1">vs last period</span>
+                <div className="text-3xl font-bold mb-2">{avgDailyScans.toLocaleString()}</div>
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <span>Per day average</span>
                 </div>
               </CardContent>
             </Card>
@@ -126,7 +186,7 @@ export default function Analytics() {
                     <Clock className="h-5 w-5 text-chart-5" />
                   </div>
                 </div>
-                <div className="text-3xl font-bold mb-2">2-3 PM</div>
+                <div className="text-3xl font-bold mb-2">{peakHour}</div>
                 <div className="flex items-center text-sm text-muted-foreground">
                   <span>Most active time</span>
                 </div>
@@ -142,24 +202,33 @@ export default function Analytics() {
                 <CardTitle>Scans Over Time</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="h-64 flex items-end justify-between space-x-2">
-                  <div className="flex-1 bg-chart-1/20 rounded-t-lg hover:bg-chart-1/30 transition-colors cursor-pointer" style={{height: "45%"}}></div>
-                  <div className="flex-1 bg-chart-1/20 rounded-t-lg hover:bg-chart-1/30 transition-colors cursor-pointer" style={{height: "60%"}}></div>
-                  <div className="flex-1 bg-chart-1/20 rounded-t-lg hover:bg-chart-1/30 transition-colors cursor-pointer" style={{height: "75%"}}></div>
-                  <div className="flex-1 bg-chart-1/20 rounded-t-lg hover:bg-chart-1/30 transition-colors cursor-pointer" style={{height: "55%"}}></div>
-                  <div className="flex-1 bg-chart-1/20 rounded-t-lg hover:bg-chart-1/30 transition-colors cursor-pointer" style={{height: "90%"}}></div>
-                  <div className="flex-1 bg-chart-1/20 rounded-t-lg hover:bg-chart-1/30 transition-colors cursor-pointer" style={{height: "85%"}}></div>
-                  <div className="flex-1 bg-chart-1/20 rounded-t-lg hover:bg-chart-1/30 transition-colors cursor-pointer" style={{height: "70%"}}></div>
-                </div>
-                <div className="flex justify-between mt-4 text-sm text-muted-foreground">
-                  <span>Mon</span>
-                  <span>Tue</span>
-                  <span>Wed</span>
-                  <span>Thu</span>
-                  <span>Fri</span>
-                  <span>Sat</span>
-                  <span>Sun</span>
-                </div>
+                {scanTimeSeries.length > 0 ? (
+                  <>
+                    <div className="h-64 flex items-end justify-between space-x-2">
+                      {scanTimeSeries.slice(-7).map((data: any, index: number) => {
+                        const maxScans = Math.max(...scanTimeSeries.map((d: any) => d.count));
+                        const height = maxScans > 0 ? (data.count / maxScans) * 100 : 0;
+                        return (
+                          <div 
+                            key={index} 
+                            className="flex-1 bg-chart-1/20 rounded-t-lg hover:bg-chart-1/30 transition-colors cursor-pointer" 
+                            style={{height: `${height}%`}}
+                            title={`${data.date}: ${data.count} scans`}
+                          ></div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex justify-between mt-4 text-sm text-muted-foreground">
+                      {scanTimeSeries.slice(-7).map((data: any, index: number) => (
+                        <span key={index}>{new Date(data.date).toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">
+                    No scan data available
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -169,42 +238,30 @@ export default function Analytics() {
                 <CardTitle>Device Breakdown</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="flex items-center">
-                      <Smartphone className="h-4 w-4 text-chart-1 mr-2" />
-                      Mobile
-                    </span>
-                    <span className="font-semibold">68%</span>
+                {devicePercentages.length > 0 ? (
+                  devicePercentages.map(({ device, count, percentage }) => {
+                    const icon = device === 'mobile' ? Smartphone : device === 'tablet' ? Tablet : Monitor;
+                    const Icon = icon;
+                    return (
+                      <div key={device}>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span className="flex items-center capitalize">
+                            <Icon className="h-4 w-4 text-chart-1 mr-2" />
+                            {device}
+                          </span>
+                          <span className="font-semibold">{percentage}%</span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-chart-1 rounded-full" style={{width: `${percentage}%`}}></div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center text-muted-foreground py-8">
+                    No device data available
                   </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-chart-1 rounded-full" style={{width: "68%"}}></div>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="flex items-center">
-                      <Monitor className="h-4 w-4 text-chart-2 mr-2" />
-                      Desktop
-                    </span>
-                    <span className="font-semibold">24%</span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-chart-2 rounded-full" style={{width: "24%"}}></div>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="flex items-center">
-                      <Tablet className="h-4 w-4 text-chart-3 mr-2" />
-                      Tablet
-                    </span>
-                    <span className="font-semibold">8%</span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-chart-3 rounded-full" style={{width: "8%"}}></div>
-                  </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -217,41 +274,26 @@ export default function Analytics() {
                 <CardTitle>Top Locations</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-sm font-semibold">🇺🇸</div>
-                    <span>United States</span>
+                {topLocations.length > 0 ? (
+                  topLocations.map(({ country, count }) => {
+                    const percentage = locationTotal > 0 ? Math.round((count / locationTotal) * 100) : 0;
+                    return (
+                      <div key={country} className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-sm font-semibold">
+                            {getCountryEmoji(country)}
+                          </div>
+                          <span>{country}</span>
+                        </div>
+                        <span className="font-semibold">{percentage}%</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center text-muted-foreground py-8">
+                    No location data available
                   </div>
-                  <span className="font-semibold">42%</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-sm font-semibold">🇬🇧</div>
-                    <span>United Kingdom</span>
-                  </div>
-                  <span className="font-semibold">28%</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-sm font-semibold">🇨🇦</div>
-                    <span>Canada</span>
-                  </div>
-                  <span className="font-semibold">15%</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-sm font-semibold">🇦🇺</div>
-                    <span>Australia</span>
-                  </div>
-                  <span className="font-semibold">10%</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-sm font-semibold">🇩🇪</div>
-                    <span>Germany</span>
-                  </div>
-                  <span className="font-semibold">5%</span>
-                </div>
+                )}
               </CardContent>
             </Card>
 
@@ -261,42 +303,28 @@ export default function Analytics() {
                 <CardTitle>Browser Distribution</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-6 h-6 rounded-full bg-chart-1 flex items-center justify-center">
-                      <div className="w-3 h-3 bg-white rounded-full"></div>
-                    </div>
-                    <span>Chrome</span>
+                {topBrowsers.length > 0 ? (
+                  topBrowsers.map(({ browser, count }, index) => {
+                    const percentage = browserTotal > 0 ? Math.round((count / browserTotal) * 100) : 0;
+                    const colors = ['chart-1', 'chart-2', 'chart-3', 'chart-4'];
+                    const color = colors[index % colors.length];
+                    return (
+                      <div key={browser} className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-6 h-6 rounded-full bg-${color} flex items-center justify-center`}>
+                            <div className="w-3 h-3 bg-white rounded-full"></div>
+                          </div>
+                          <span>{browser}</span>
+                        </div>
+                        <span className="font-semibold">{percentage}%</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center text-muted-foreground py-8">
+                    No browser data available
                   </div>
-                  <span className="font-semibold">52%</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-6 h-6 rounded-full bg-chart-2 flex items-center justify-center">
-                      <div className="w-3 h-3 bg-white rounded-full"></div>
-                    </div>
-                    <span>Safari</span>
-                  </div>
-                  <span className="font-semibold">28%</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-6 h-6 rounded-full bg-chart-3 flex items-center justify-center">
-                      <div className="w-3 h-3 bg-white rounded-full"></div>
-                    </div>
-                    <span>Firefox</span>
-                  </div>
-                  <span className="font-semibold">12%</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-6 h-6 rounded-full bg-chart-4 flex items-center justify-center">
-                      <div className="w-3 h-3 bg-white rounded-full"></div>
-                    </div>
-                    <span>Edge</span>
-                  </div>
-                  <span className="font-semibold">8%</span>
-                </div>
+                )}
               </CardContent>
             </Card>
 
@@ -306,42 +334,29 @@ export default function Analytics() {
                 <CardTitle>Operating Systems</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-6 h-6 rounded bg-chart-4 flex items-center justify-center">
-                      <span className="text-xs text-white font-bold">A</span>
-                    </div>
-                    <span>Android</span>
+                {topOS.length > 0 ? (
+                  topOS.map(({ os, count }, index) => {
+                    const percentage = osTotal > 0 ? Math.round((count / osTotal) * 100) : 0;
+                    const colors = ['chart-4', 'chart-1', 'chart-2', 'chart-3'];
+                    const color = colors[index % colors.length];
+                    const initial = os[0] || 'U';
+                    return (
+                      <div key={os} className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-6 h-6 rounded bg-${color} flex items-center justify-center`}>
+                            <span className="text-xs text-white font-bold">{initial}</span>
+                          </div>
+                          <span>{os}</span>
+                        </div>
+                        <span className="font-semibold">{percentage}%</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center text-muted-foreground py-8">
+                    No OS data available
                   </div>
-                  <span className="font-semibold">45%</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-6 h-6 rounded bg-chart-1 flex items-center justify-center">
-                      <span className="text-xs text-white font-bold">i</span>
-                    </div>
-                    <span>iOS</span>
-                  </div>
-                  <span className="font-semibold">32%</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-6 h-6 rounded bg-chart-2 flex items-center justify-center">
-                      <span className="text-xs text-white font-bold">W</span>
-                    </div>
-                    <span>Windows</span>
-                  </div>
-                  <span className="font-semibold">18%</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-6 h-6 rounded bg-chart-3 flex items-center justify-center">
-                      <span className="text-xs text-white font-bold">M</span>
-                    </div>
-                    <span>macOS</span>
-                  </div>
-                  <span className="font-semibold">5%</span>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>

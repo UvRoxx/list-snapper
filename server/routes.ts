@@ -221,6 +221,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/analytics", authenticateToken, async (req: any, res) => {
+    try {
+      const { timeRange } = req.query;
+      const analytics = await storage.getUserAnalytics(req.user.userId, timeRange as string);
+      res.json(analytics);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   app.get("/api/qr-codes/:id/download", authenticateToken, async (req: any, res) => {
     try {
       const { id } = req.params;

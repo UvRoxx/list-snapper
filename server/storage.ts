@@ -39,6 +39,7 @@ export interface IStorage {
   createQrCodeScan(scan: Omit<QrCodeScan, 'id' | 'scannedAt'>): Promise<QrCodeScan>;
   getQrCodeScans(qrCodeId: string): Promise<QrCodeScan[]>;
   getQrCodeAnalytics(qrCodeId: string): Promise<any>;
+  getUserAnalytics(userId: string, timeRange?: string): Promise<any>;
 
   // Membership methods
   getMembershipTiers(): Promise<MembershipTier[]>;
@@ -171,6 +172,124 @@ export class DatabaseStorage implements IStorage {
         acc[browser] = (acc[browser] || 0) + 1;
         return acc;
       }, {} as Record<string, number>),
+    };
+  }
+
+  async getUserAnalytics(userId: string, timeRange?: string): Promise<any> {
+    // Get all user's QR codes
+    const userQrCodes = await this.getUserQrCodes(userId);
+    const qrCodeIds = userQrCodes.map(qr => qr.id);
+    
+    if (qrCodeIds.length === 0) {
+      return {
+        totalScans: 0,
+        uniqueVisitors: 0,
+        avgDailyScans: 0,
+        peakHour: 'N/A',
+        deviceBreakdown: {},
+        browserBreakdown: {},
+        osBreakdown: {},
+        locationBreakdown: {},
+        scanTimeSeries: [],
+      };
+    }
+
+    // Calculate date range
+    let dateFilter = sql`1=1`;
+    const now = new Date();
+    if (timeRange === '7days') {
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      dateFilter = sql`${qrCodeScans.scannedAt} >= ${sevenDaysAgo.toISOString()}`;
+    } else if (timeRange === '30days') {
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      dateFilter = sql`${qrCodeScans.scannedAt} >= ${thirtyDaysAgo.toISOString()}`;
+    } else if (timeRange === '90days') {
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      dateFilter = sql`${qrCodeScans.scannedAt} >= ${ninetyDaysAgo.toISOString()}`;
+    }
+
+    // Get all scans for user's QR codes
+    const scans = await db
+      .select()
+      .from(qrCodeScans)
+      .where(and(
+        sql`${qrCodeScans.qrCodeId} IN (${sql.join(qrCodeIds.map(id => sql`${id}`), sql`, `)})`,
+        dateFilter
+      ))
+      .orderBy(desc(qrCodeScans.scannedAt));
+
+    // Calculate unique visitors
+    const uniqueIps = new Set(scans.map(s => s.ipAddress).filter(ip => ip !== null));
+
+    // Device breakdown
+    const deviceBreakdown = scans.reduce((acc, scan) => {
+      const device = scan.deviceType || 'Unknown';
+      acc[device] = (acc[device] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Browser breakdown
+    const browserBreakdown = scans.reduce((acc, scan) => {
+      const browser = scan.browser || 'Unknown';
+      acc[browser] = (acc[browser] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // OS breakdown
+    const osBreakdown = scans.reduce((acc, scan) => {
+      const os = scan.operatingSystem || 'Unknown';
+      acc[os] = (acc[os] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Location breakdown
+    const locationBreakdown = scans.reduce((acc, scan) => {
+      const country = scan.country || 'Unknown';
+      acc[country] = (acc[country] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Time series data (scans by day)
+    const scansByDate = scans.reduce((acc, scan) => {
+      const date = new Date(scan.scannedAt).toISOString().split('T')[0];
+      acc[date] = (acc[date] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const scanTimeSeries = Object.entries(scansByDate)
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Peak hour calculation
+    const hourCounts = scans.reduce((acc, scan) => {
+      const hour = new Date(scan.scannedAt).getHours();
+      acc[hour] = (acc[hour] || 0) + 1;
+      return acc;
+    }, {} as Record<number, number>);
+
+    let peakHour = 'N/A';
+    if (Object.keys(hourCounts).length > 0) {
+      const maxHour = Object.entries(hourCounts).reduce((max, [hour, count]) => 
+        count > max.count ? { hour: parseInt(hour), count } : max,
+        { hour: 0, count: 0 }
+      );
+      peakHour = `${maxHour.hour}:00 - ${maxHour.hour + 1}:00`;
+    }
+
+    // Calculate average daily scans
+    const days = timeRange === '7days' ? 7 : timeRange === '30days' ? 30 : timeRange === '90days' ? 90 : 30;
+    const avgDailyScans = Math.round(scans.length / days);
+
+    return {
+      totalScans: scans.length,
+      uniqueVisitors: uniqueIps.size,
+      avgDailyScans,
+      peakHour,
+      deviceBreakdown,
+      browserBreakdown,
+      osBreakdown,
+      locationBreakdown,
+      scanTimeSeries,
     };
   }
 
