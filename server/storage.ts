@@ -276,9 +276,24 @@ export class DatabaseStorage implements IStorage {
       peakHour = `${maxHour.hour}:00 - ${maxHour.hour + 1}:00`;
     }
 
-    // Calculate average daily scans
-    const days = timeRange === '7days' ? 7 : timeRange === '30days' ? 30 : timeRange === '90days' ? 90 : 30;
-    const avgDailyScans = Math.round(scans.length / days);
+    // Calculate average daily scans based on actual time range
+    let days = 30;
+    if (timeRange === '7days') {
+      days = 7;
+    } else if (timeRange === '30days') {
+      days = 30;
+    } else if (timeRange === '90days') {
+      days = 90;
+    } else if (scans.length > 0) {
+      // For "all" time or custom ranges, calculate from actual data span
+      const timestamps = scans.map(s => new Date(s.scannedAt).getTime());
+      const minTime = Math.min(...timestamps);
+      const maxTime = Math.max(...timestamps);
+      const daysDiff = (maxTime - minTime) / (1000 * 60 * 60 * 24);
+      days = Math.max(1, Math.ceil(daysDiff));
+    }
+    
+    const avgDailyScans = days > 0 ? Math.round(scans.length / days) : 0;
 
     return {
       totalScans: scans.length,
