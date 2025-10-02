@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
-import { useToast } from "@/hooks/use-toast";
+import { OrderDialog } from "@/components/order-dialog";
 import { 
   Tag, 
   Package, 
@@ -13,28 +13,41 @@ import {
   Truck,
   Clock
 } from "lucide-react";
+import { useState, useEffect } from "react";
 
 export default function Orders() {
   const { user } = useAuth();
-  const { toast } = useToast();
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+  const [selectedQrCodeId, setSelectedQrCodeId] = useState<string | null>(null);
+  const [selectedProductType, setSelectedProductType] = useState<"sticker" | "yard_sign" | null>(null);
   
   const { data: orders = [] } = useQuery<any[]>({
     queryKey: ['/api/orders'],
     enabled: !!user
   });
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const qrId = params.get('qrId');
+    const type = params.get('type');
+    
+    if (qrId && (type === 'sticker' || type === 'yard_sign')) {
+      setSelectedQrCodeId(qrId);
+      setSelectedProductType(type);
+      setOrderDialogOpen(true);
+    }
+  }, []);
+
   const handleOrderStickers = () => {
-    toast({
-      title: "Order Stickers",
-      description: "Sticker ordering with Printify integration will be implemented here"
-    });
+    setSelectedProductType('sticker');
+    setSelectedQrCodeId(null);
+    setOrderDialogOpen(true);
   };
 
   const handleOrderYardSigns = () => {
-    toast({
-      title: "Order Yard Signs", 
-      description: "Yard sign ordering with Printify integration will be implemented here"
-    });
+    setSelectedProductType('yard_sign');
+    setSelectedQrCodeId(null);
+    setOrderDialogOpen(true);
   };
 
   const getStatusIcon = (status: string) => {
@@ -242,6 +255,18 @@ export default function Orders() {
           </Card>
         </div>
       </div>
+
+      <OrderDialog
+        open={orderDialogOpen}
+        onOpenChange={(open) => {
+          setOrderDialogOpen(open);
+          if (!open) {
+            window.history.replaceState({}, '', '/orders');
+          }
+        }}
+        qrCodeId={selectedQrCodeId}
+        productType={selectedProductType}
+      />
     </ProtectedRoute>
   );
 }

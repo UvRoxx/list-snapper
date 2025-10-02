@@ -3,7 +3,7 @@ import { useParams, Link, useLocation } from "wouter";
 import { Navigation } from "@/components/navigation";
 import { ProtectedRoute } from "@/components/protected-route";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { 
@@ -16,11 +16,14 @@ import {
   ExternalLink,
   QrCode as QrCodeIcon,
   Package,
-  FileText
+  FileText,
+  Lock,
+  Zap
 } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import type { QrCode } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
 
 interface Analytics {
   totalScans: number;
@@ -34,6 +37,9 @@ export default function QrDetail() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const [qrDataUrl, setQrDataUrl] = useState("");
+  const { user } = useAuth();
+
+  const hasAnalyticsAccess = user?.membership?.tierName === 'STANDARD' || user?.membership?.tierName === 'PRO';
 
   const { data: qrCode, isLoading } = useQuery<QrCode>({
     queryKey: [`/api/qr-codes/${id}`],
@@ -42,7 +48,7 @@ export default function QrDetail() {
 
   const { data: analytics } = useQuery<Analytics>({
     queryKey: [`/api/qr-codes/${id}/analytics`],
-    enabled: !!id
+    enabled: !!id && hasAnalyticsAccess
   });
 
   useEffect(() => {
@@ -276,81 +282,142 @@ export default function QrDetail() {
                 </CardContent>
               </Card>
 
-              {/* Analytics Overview */}
-              <Card data-testid="card-analytics-overview">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
+              {/* Analytics Overview or Upgrade Prompt */}
+              {!hasAnalyticsAccess ? (
+                <Card data-testid="card-upgrade-prompt" className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 via-transparent to-primary/10">
+                  <CardHeader>
                     <CardTitle className="flex items-center">
-                      <Eye className="h-5 w-5 mr-2" />
-                      Analytics Overview
+                      <Lock className="h-5 w-5 mr-2 text-primary" />
+                      Unlock Analytics
                     </CardTitle>
-                    <Link href="/analytics">
-                      <Button variant="outline" size="sm" data-testid="button-view-full-analytics">
-                        View Full Analytics
+                    <CardDescription>
+                      Upgrade to STANDARD or PRO to access detailed analytics for your QR codes
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-4">
+                      <div className="flex items-start space-x-3">
+                        <Zap className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-semibold">Real-Time Insights</div>
+                          <div className="text-sm text-muted-foreground">Track scans, unique visitors, and engagement</div>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-3">
+                        <MapPin className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-semibold">Location Analytics</div>
+                          <div className="text-sm text-muted-foreground">See where your QR codes are being scanned</div>
+                        </div>
+                      </div>
+                      <div className="flex items-start space-x-3">
+                        <Monitor className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-semibold">Device & Browser Breakdown</div>
+                          <div className="text-sm text-muted-foreground">Understand your audience better</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button 
+                        className="flex-1" 
+                        onClick={() => setLocation('/checkout/STANDARD')}
+                        data-testid="button-upgrade-standard"
+                      >
+                        Upgrade to STANDARD
+                        <span className="ml-2 text-xs">$4.99/mo</span>
                       </Button>
-                    </Link>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid md:grid-cols-3 gap-6 mb-6">
-                    <div>
-                      <div className="text-3xl font-bold" data-testid="text-total-scans">
-                        {analytics?.totalScans || qrCode.scanCount || 0}
-                      </div>
-                      <div className="text-sm text-muted-foreground">Total Scans</div>
+                      <Button 
+                        className="flex-1" 
+                        variant="outline"
+                        onClick={() => setLocation('/checkout/PRO')}
+                        data-testid="button-upgrade-pro"
+                      >
+                        Upgrade to PRO
+                        <span className="ml-2 text-xs">$9.99/mo</span>
+                      </Button>
                     </div>
-                    <div>
-                      <div className="text-3xl font-bold" data-testid="text-unique-visitors">
-                        {analytics?.uniqueVisitors || 0}
-                      </div>
-                      <div className="text-sm text-muted-foreground">Unique Visitors</div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card data-testid="card-analytics-overview">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center">
+                        <Eye className="h-5 w-5 mr-2" />
+                        Analytics Overview
+                      </CardTitle>
+                      <Link href="/analytics">
+                        <Button variant="outline" size="sm" data-testid="button-view-full-analytics">
+                          View Full Analytics
+                        </Button>
+                      </Link>
                     </div>
-                    <div>
-                      <div className="text-3xl font-bold" data-testid="text-conversion-rate">
-                        {analytics && analytics.totalScans > 0 ? 
-                          Math.round((analytics.uniqueVisitors / analytics.totalScans) * 100) : 0}%
-                      </div>
-                      <div className="text-sm text-muted-foreground">Unique Rate</div>
-                    </div>
-                  </div>
-
-                  {topLocations.length > 0 && (
-                    <>
-                      <Separator className="my-4" />
-                      <div className="space-y-3">
-                        <div className="flex items-center text-sm font-semibold">
-                          <MapPin className="h-4 w-4 mr-2" />
-                          Top Locations
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid md:grid-cols-3 gap-6 mb-6">
+                      <div>
+                        <div className="text-3xl font-bold" data-testid="text-total-scans">
+                          {analytics?.totalScans || qrCode.scanCount || 0}
                         </div>
-                        {topLocations.map(({ country, count }) => (
-                          <div key={country} className="flex justify-between text-sm">
-                            <span>{country}</span>
-                            <span className="font-semibold">{count} scans</span>
-                          </div>
-                        ))}
+                        <div className="text-sm text-muted-foreground">Total Scans</div>
                       </div>
-                    </>
-                  )}
-
-                  {topDevices.length > 0 && (
-                    <>
-                      <Separator className="my-4" />
-                      <div className="space-y-3">
-                        <div className="flex items-center text-sm font-semibold">
-                          <Monitor className="h-4 w-4 mr-2" />
-                          Top Devices
+                      <div>
+                        <div className="text-3xl font-bold" data-testid="text-unique-visitors">
+                          {analytics?.uniqueVisitors || 0}
                         </div>
-                        {topDevices.map(({ device, count }) => (
-                          <div key={device} className="flex justify-between text-sm capitalize">
-                            <span>{device}</span>
-                            <span className="font-semibold">{count} scans</span>
-                          </div>
-                        ))}
+                        <div className="text-sm text-muted-foreground">Unique Visitors</div>
                       </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+                      <div>
+                        <div className="text-3xl font-bold" data-testid="text-conversion-rate">
+                          {analytics && analytics.totalScans > 0 ? 
+                            Math.round((analytics.uniqueVisitors / analytics.totalScans) * 100) : 0}%
+                        </div>
+                        <div className="text-sm text-muted-foreground">Unique Rate</div>
+                      </div>
+                    </div>
+
+                    {topLocations.length > 0 && (
+                      <>
+                        <Separator className="my-4" />
+                        <div className="space-y-3">
+                          <div className="flex items-center text-sm font-semibold">
+                            <MapPin className="h-4 w-4 mr-2" />
+                            Top Locations
+                          </div>
+                          {topLocations.map(({ country, count }) => (
+                            <div key={country} className="flex justify-between text-sm">
+                              <span>{country}</span>
+                              <span className="font-semibold">{count} scans</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {topDevices.length > 0 && (
+                      <>
+                        <Separator className="my-4" />
+                        <div className="space-y-3">
+                          <div className="flex items-center text-sm font-semibold">
+                            <Monitor className="h-4 w-4 mr-2" />
+                            Top Devices
+                          </div>
+                          {topDevices.map(({ device, count }) => (
+                            <div key={device} className="flex justify-between text-sm capitalize">
+                              <span>{device}</span>
+                              <span className="font-semibold">{count} scans</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </div>

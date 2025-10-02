@@ -51,18 +51,22 @@ export function Navigation() {
               <span className="text-xl font-bold">ListSnapper</span>
             </Link>
             <div className="hidden md:flex space-x-6">
-              <Link 
-                href="/" 
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Home
-              </Link>
-              <Link 
-                href="/pricing" 
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Pricing
-              </Link>
+              {!user && (
+                <>
+                  <Link 
+                    href="/" 
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Home
+                  </Link>
+                  <Link 
+                    href="/pricing" 
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Pricing
+                  </Link>
+                </>
+              )}
               {user && (
                 <>
                   <Link 
