@@ -152,6 +152,7 @@ export const insertQrCodeSchema = createInsertSchema(qrCodes).pick({
   customColor: true,
   customBgColor: true,
   logoUrl: true,
+  isActive: true,
 });
 
 export const insertOrderSchema = createInsertSchema(orders).pick({
