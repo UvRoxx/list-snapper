@@ -18,7 +18,7 @@ export default function Orders() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const { data: orders = [] } = useQuery({
+  const { data: orders = [] } = useQuery<any[]>({
     queryKey: ['/api/orders'],
     enabled: !!user
   });

@@ -21,7 +21,7 @@ import {
 export default function Dashboard() {
   const { user } = useAuth();
   
-  const { data: qrCodes = [], isLoading } = useQuery({
+  const { data: qrCodes = [], isLoading } = useQuery<any[]>({
     queryKey: ['/api/qr-codes'],
     enabled: !!user
   });

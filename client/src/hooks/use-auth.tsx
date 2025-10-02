@@ -14,8 +14,8 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (userData: any) => Promise<void>;
+  login: (email: string, password: string) => Promise<any>;
+  register: (userData: any) => Promise<any>;
   logout: () => void;
 }
 
@@ -76,10 +76,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token]);
 
   const value = {
-    user: user || null,
+    user: (user as User) || null,
     isLoading,
-    login: loginMutation.mutateAsync,
-    register: registerMutation.mutateAsync,
+    login: async (email: string, password: string) => {
+      return loginMutation.mutateAsync({ email, password });
+    },
+    register: async (userData: any) => {
+      return registerMutation.mutateAsync(userData);
+    },
     logout,
   };
 

@@ -21,7 +21,7 @@ import {
 export default function Analytics() {
   const { user } = useAuth();
   
-  const { data: qrCodes = [] } = useQuery({
+  const { data: qrCodes = [] } = useQuery<any[]>({
     queryKey: ['/api/qr-codes'],
     enabled: !!user
   });

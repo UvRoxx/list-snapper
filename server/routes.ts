@@ -15,7 +15,7 @@ if (!process.env.STRIPE_SECRET_KEY) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2024-06-20",
+  apiVersion: "2025-09-30.clover",
 });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret';
@@ -88,7 +88,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createUserMembership({
         userId: user.id,
         tierName: 'FREE',
-        isActive: true
+        isActive: true,
+        expiresAt: null
       });
 
       // Generate JWT token
@@ -232,8 +233,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const fullUrl = `${process.env.FRONTEND_URL || 'http://localhost:5000'}/r/${qrCode.shortCode}`;
       const qrDataUrl = await QRCode.toDataURL(fullUrl, {
         color: {
-          dark: qrCode.customColor,
-          light: qrCode.customBgColor
+          dark: qrCode.customColor || '#000000',
+          light: qrCode.customBgColor || '#FFFFFF'
         },
         width: 512
       });
@@ -260,8 +261,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       await storage.createQrCodeScan({
         qrCodeId: qrCode.id,
-        ipAddress: req.ip,
+        ipAddress: req.ip || null,
         userAgent,
+        country: null,
+        city: null,
         ...deviceInfo
       });
 
