@@ -11,20 +11,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Package, CreditCard, CheckCircle2 } from "lucide-react";
+import { Loader2, Package, CreditCard, CheckCircle2, Sticker, SignpostBig, Flag, FileImage, Check } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { useAuth } from "@/hooks/use-auth";
 import type { QrCode } from "@shared/schema";
+import QRCodeLib from "qrcode";
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
 
@@ -32,18 +28,76 @@ interface OrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   qrCodeId: string | null;
-  productType: "sticker" | "yard_sign" | null;
 }
 
 interface CheckoutFormProps {
   qrCode: QrCode;
-  productType: "sticker" | "yard_sign";
-  size: string;
+  productType: string;
+  size: string | null;
   quantity: number;
   total: number;
-  shippingAddress: string;
+  shippingAddress: ShippingAddress;
   onSuccess: () => void;
 }
+
+interface ShippingAddress {
+  fullName: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+}
+
+const products = [
+  {
+    type: "sticker",
+    name: "Stickers",
+    description: "Weather-resistant vinyl QR stickers",
+    icon: Sticker,
+  },
+  {
+    type: "yard_sign",
+    name: "Yard Sign",
+    description: "18x24 corrugated plastic sign",
+    icon: SignpostBig,
+  },
+  {
+    type: "banner",
+    name: "Banner",
+    description: "Large vinyl banner (coming soon)",
+    icon: Flag,
+    disabled: true,
+  },
+  {
+    type: "poster",
+    name: "Poster",
+    description: "High-quality printed poster (coming soon)",
+    icon: FileImage,
+    disabled: true,
+  },
+];
+
+const sizeOptions = [
+  {
+    value: "small",
+    label: "Small",
+    dimensions: "1\" × 1\"",
+    price: 0.50,
+  },
+  {
+    value: "medium",
+    label: "Medium",
+    dimensions: "2\" × 2\"",
+    price: 1.00,
+  },
+  {
+    value: "large",
+    label: "Large",
+    dimensions: "3\" × 3\"",
+    price: 1.50,
+  },
+];
 
 function CheckoutForm({ qrCode, productType, size, quantity, total, shippingAddress, onSuccess }: CheckoutFormProps) {
   const stripe = useStripe();
@@ -59,7 +113,7 @@ function CheckoutForm({ qrCode, productType, size, quantity, total, shippingAddr
         quantity,
         size,
         total: total.toFixed(2),
-        shippingAddress,
+        shippingAddress: JSON.stringify(shippingAddress),
         stripePaymentIntentId: paymentIntentId,
       });
     },
@@ -132,16 +186,27 @@ function CheckoutForm({ qrCode, productType, size, quantity, total, shippingAddr
   );
 }
 
-export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: OrderDialogProps) {
+export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) {
   const { toast } = useToast();
-  const [step, setStep] = useState(qrCodeId ? 1 : 0);
+  const { user } = useAuth();
+  const [step, setStep] = useState(0);
   const [selectedQrCodeId, setSelectedQrCodeId] = useState<string | null>(qrCodeId);
-  const [size, setSize] = useState("medium");
+  const [productType, setProductType] = useState<string | null>(null);
+  const [size, setSize] = useState<string | null>("medium");
   const [quantity, setQuantity] = useState(10);
-  const [shippingAddress, setShippingAddress] = useState("");
+  const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
+    fullName: "",
+    address: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    country: "US",
+  });
+  const [saveAddress, setSaveAddress] = useState(false);
   const [total, setTotal] = useState(0);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [orderComplete, setOrderComplete] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
 
   const { data: qrCodes = [] } = useQuery<QrCode[]>({
     queryKey: ['/api/qr-codes'],
@@ -160,8 +225,34 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: Order
     } else {
       setSelectedQrCodeId(null);
       setStep(0);
+      setProductType(null);
     }
   }, [qrCodeId, open]);
+
+  useEffect(() => {
+    if (user?.savedAddress) {
+      try {
+        const saved = JSON.parse(user.savedAddress);
+        setShippingAddress(saved);
+      } catch (e) {
+        console.error("Failed to parse saved address");
+      }
+    }
+  }, [user, open]);
+
+  useEffect(() => {
+    if (qrCode) {
+      const url = `${window.location.origin}/qr/${qrCode.shortCode}`;
+      QRCodeLib.toDataURL(url, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: qrCode.customColor || "#000000",
+          light: qrCode.customBgColor || "#FFFFFF",
+        },
+      }).then(setQrCodeDataUrl).catch(console.error);
+    }
+  }, [qrCode]);
 
   useEffect(() => {
     if (open && productType && quantity > 0 && selectedQrCodeId) {
@@ -190,15 +281,31 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: Order
     }
   };
 
+  const handleSaveAddress = async () => {
+    if (saveAddress) {
+      try {
+        await apiRequest('/api/users/save-address', 'POST', {
+          address: JSON.stringify(shippingAddress),
+        });
+        queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      } catch (error) {
+        console.error("Failed to save address", error);
+      }
+    }
+  };
+
   const handleCreatePaymentIntent = async () => {
-    if (!shippingAddress.trim()) {
+    const { fullName, address, city, state, zipCode } = shippingAddress;
+    if (!fullName || !address || !city || !state || !zipCode) {
       toast({
-        title: "Shipping Address Required",
-        description: "Please enter your shipping address",
+        title: "Complete Address Required",
+        description: "Please fill in all address fields",
         variant: "destructive",
       });
       return;
     }
+
+    await handleSaveAddress();
 
     try {
       const response = await fetch('/api/create-payment-intent', {
@@ -213,7 +320,7 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: Order
       });
       const data = await response.json();
       setClientSecret(data.clientSecret);
-      setStep(3);
+      setStep(4);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -226,6 +333,7 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: Order
   const handleClose = () => {
     setStep(qrCodeId ? 1 : 0);
     setSelectedQrCodeId(qrCodeId);
+    setProductType(null);
     setClientSecret(null);
     setOrderComplete(false);
     onOpenChange(false);
@@ -239,24 +347,23 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: Order
     });
   };
 
-  if (!productType) {
-    return null;
-  }
-
-  const productName = productType === "sticker" ? "QR Code Stickers" : "QR Code Yard Sign";
+  const getProductName = () => {
+    const product = products.find(p => p.type === productType);
+    return product?.name || "Product";
+  };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="dialog-order">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="dialog-order">
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <Package className="h-5 w-5 mr-2" />
-            {orderComplete ? "Order Complete" : `Order ${productName}`}
+            {orderComplete ? "Order Complete" : `Order Physical Products`}
           </DialogTitle>
           <DialogDescription>
             {orderComplete
               ? "Thank you for your order!"
-              : qrCode ? `Complete your order for ${qrCode.name}` : `Order ${productName}`}
+              : qrCode ? `Create an order for ${qrCode.name}` : `Select a product to order`}
           </DialogDescription>
         </DialogHeader>
 
@@ -276,7 +383,7 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: Order
             {/* Progress Steps */}
             {step > 0 && (
               <div className="flex items-center justify-center space-x-2">
-                {[1, 2, 3].map((num) => (
+                {[1, 2, 3, 4].map((num) => (
                   <div key={num} className="flex items-center">
                     <div
                       className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
@@ -287,7 +394,7 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: Order
                     >
                       {num}
                     </div>
-                    {num < 3 && (
+                    {num < 4 && (
                       <div
                         className={`w-12 h-0.5 ${
                           step > num ? "bg-primary" : "bg-muted"
@@ -302,73 +409,166 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: Order
             {/* Step 0: Select QR Code */}
             {step === 0 && (
               <div className="space-y-4">
-                <Card>
-                  <CardContent className="pt-6">
-                    <h3 className="font-semibold mb-4">Select QR Code</h3>
-                    {qrCodes.length === 0 ? (
-                      <div className="text-center py-8">
-                        <p className="text-muted-foreground">No QR codes available. Create a QR code first.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Label htmlFor="qrCode">Choose QR Code</Label>
-                        <Select
-                          value={selectedQrCodeId || ""}
-                          onValueChange={setSelectedQrCodeId}
-                        >
-                          <SelectTrigger id="qrCode" data-testid="select-qr-code">
-                            <SelectValue placeholder="Select a QR code" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {qrCodes.map((qr) => (
-                              <SelectItem key={qr.id} value={qr.id}>
-                                {qr.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                <div>
+                  <h3 className="font-semibold mb-2">Select QR Code</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Choose which QR code you'd like to order products for
+                  </p>
+                </div>
+                
+                {qrCodes.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Package className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No QR Codes Yet</h3>
+                    <p className="text-muted-foreground">
+                      Create a QR code first before ordering physical products
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {qrCodes.map((qr) => (
+                      <Card
+                        key={qr.id}
+                        className={`cursor-pointer transition-all hover:shadow-md ${
+                          selectedQrCodeId === qr.id
+                            ? "ring-2 ring-primary"
+                            : ""
+                        }`}
+                        onClick={() => setSelectedQrCodeId(qr.id)}
+                        data-testid={`card-qr-${qr.id}`}
+                      >
+                        <CardContent className="p-4 flex items-center justify-between">
+                          <div>
+                            <h4 className="font-semibold">{qr.name}</h4>
+                            <p className="text-sm text-muted-foreground truncate max-w-md">
+                              {qr.destinationUrl}
+                            </p>
+                          </div>
+                          {selectedQrCodeId === qr.id && (
+                            <div className="bg-primary text-primary-foreground rounded-full p-1">
+                              <Check className="h-4 w-4" />
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
 
                 <Button
                   onClick={() => setStep(1)}
                   className="w-full"
                   disabled={!selectedQrCodeId}
-                  data-testid="button-next-step"
+                  data-testid="button-next-qr"
                 >
                   Continue
                 </Button>
               </div>
             )}
 
-            {/* Step 1: Product Configuration */}
-            {step === 1 && qrCode && (
+            {/* Step 1: Select Product */}
+            {step === 1 && (
               <div className="space-y-4">
-                <Card>
-                  <CardContent className="pt-6">
-                    <h3 className="font-semibold mb-4">Product Configuration</h3>
+                <div>
+                  <h3 className="font-semibold mb-2">Select Product</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Choose the physical product you'd like to order
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {products.map((product) => {
+                    const Icon = product.icon;
+                    return (
+                      <Card
+                        key={product.type}
+                        className={`cursor-pointer transition-all hover:shadow-md ${
+                          productType === product.type
+                            ? "ring-2 ring-primary"
+                            : ""
+                        } ${product.disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+                        onClick={() => !product.disabled && setProductType(product.type)}
+                        data-testid={`card-product-${product.type}`}
+                      >
+                        <CardContent className="pt-6 text-center space-y-3">
+                          <Icon className="h-12 w-12 mx-auto text-primary" />
+                          <div>
+                            <h4 className="font-semibold">{product.name}</h4>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {product.description}
+                            </p>
+                          </div>
+                          {productType === product.type && (
+                            <div className="flex justify-center">
+                              <div className="bg-primary text-primary-foreground rounded-full p-1">
+                                <Check className="h-4 w-4" />
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  onClick={() => setStep(2)}
+                  className="w-full"
+                  disabled={!productType}
+                  data-testid="button-next-product"
+                >
+                  Continue
+                </Button>
+              </div>
+            )}
+
+            {/* Step 2: Size & Quantity */}
+            {step === 2 && qrCode && (
+              <div className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="font-semibold mb-4">Configure Product</h3>
 
                     {productType === "sticker" && (
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="size">Size</Label>
-                          <Select value={size} onValueChange={setSize}>
-                            <SelectTrigger id="size" data-testid="select-size">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="small">1" - Small ($0.50 each)</SelectItem>
-                              <SelectItem value="medium">2" - Medium ($1.00 each)</SelectItem>
-                              <SelectItem value="large">3" - Large ($1.50 each)</SelectItem>
-                            </SelectContent>
-                          </Select>
+                      <div className="space-y-4 mb-4">
+                        <Label>Select Size</Label>
+                        <div className="grid grid-cols-1 gap-3">
+                          {sizeOptions.map((option) => (
+                            <Card
+                              key={option.value}
+                              className={`cursor-pointer transition-all hover:shadow-md ${
+                                size === option.value
+                                  ? "ring-2 ring-primary"
+                                  : ""
+                              }`}
+                              onClick={() => setSize(option.value)}
+                              data-testid={`card-size-${option.value}`}
+                            >
+                              <CardContent className="p-4 flex items-center justify-between">
+                                <div>
+                                  <h4 className="font-semibold">{option.label}</h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    {option.dimensions}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-lg font-bold">
+                                    ${option.price.toFixed(2)}
+                                  </span>
+                                  {size === option.value && (
+                                    <div className="bg-primary text-primary-foreground rounded-full p-1">
+                                      <Check className="h-4 w-4" />
+                                    </div>
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
                         </div>
                       </div>
                     )}
 
-                    <div className="mt-4">
+                    <div>
                       <Label htmlFor="quantity">Quantity</Label>
                       <Input
                         id="quantity"
@@ -377,6 +577,7 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: Order
                         max="1000"
                         value={quantity}
                         onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                        className="mt-2"
                         data-testid="input-quantity"
                       />
                     </div>
@@ -389,35 +590,154 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: Order
                         ${total.toFixed(2)}
                       </span>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
 
-                <Button
-                  onClick={() => setStep(2)}
-                  className="w-full"
-                  data-testid="button-next-step"
-                >
-                  Continue to Shipping
-                </Button>
+                  <div>
+                    <h3 className="font-semibold mb-4">Preview</h3>
+                    <Card>
+                      <CardContent className="pt-6">
+                        {qrCodeDataUrl ? (
+                          <img
+                            src={qrCodeDataUrl}
+                            alt="QR Code Preview"
+                            className="w-full max-w-[250px] mx-auto"
+                            data-testid="img-qr-preview"
+                          />
+                        ) : (
+                          <div className="w-full h-[250px] bg-muted animate-pulse rounded" />
+                        )}
+                        <div className="mt-4 text-center">
+                          <p className="font-medium">{qrCode.name}</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {qrCode.destinationUrl}
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setStep(1)}
+                    className="flex-1"
+                    data-testid="button-back"
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    onClick={() => setStep(3)}
+                    className="flex-1"
+                    data-testid="button-next-shipping"
+                  >
+                    Continue to Shipping
+                  </Button>
+                </div>
               </div>
             )}
 
-            {/* Step 2: Shipping Address */}
-            {step === 2 && (
+            {/* Step 3: Shipping Address */}
+            {step === 3 && (
               <div className="space-y-4">
                 <Card>
                   <CardContent className="pt-6">
                     <h3 className="font-semibold mb-4">Shipping Address</h3>
-                    <div className="space-y-2">
-                      <Label htmlFor="address">Full Address</Label>
-                      <textarea
-                        id="address"
-                        className="w-full min-h-[120px] px-3 py-2 border rounded-md"
-                        placeholder="Enter your complete shipping address including street, city, state, and ZIP code"
-                        value={shippingAddress}
-                        onChange={(e) => setShippingAddress(e.target.value)}
-                        data-testid="textarea-shipping-address"
-                      />
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="fullName">Full Name</Label>
+                        <Input
+                          id="fullName"
+                          value={shippingAddress.fullName}
+                          onChange={(e) =>
+                            setShippingAddress({ ...shippingAddress, fullName: e.target.value })
+                          }
+                          placeholder="John Doe"
+                          data-testid="input-full-name"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="address">Street Address</Label>
+                        <Input
+                          id="address"
+                          value={shippingAddress.address}
+                          onChange={(e) =>
+                            setShippingAddress({ ...shippingAddress, address: e.target.value })
+                          }
+                          placeholder="123 Main St, Apt 4B"
+                          data-testid="input-address"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="city">City</Label>
+                          <Input
+                            id="city"
+                            value={shippingAddress.city}
+                            onChange={(e) =>
+                              setShippingAddress({ ...shippingAddress, city: e.target.value })
+                            }
+                            placeholder="New York"
+                            data-testid="input-city"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="state">State/Province</Label>
+                          <Input
+                            id="state"
+                            value={shippingAddress.state}
+                            onChange={(e) =>
+                              setShippingAddress({ ...shippingAddress, state: e.target.value })
+                            }
+                            placeholder="NY"
+                            data-testid="input-state"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="zipCode">ZIP/Postal Code</Label>
+                          <Input
+                            id="zipCode"
+                            value={shippingAddress.zipCode}
+                            onChange={(e) =>
+                              setShippingAddress({ ...shippingAddress, zipCode: e.target.value })
+                            }
+                            placeholder="10001"
+                            data-testid="input-zip"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="country">Country</Label>
+                          <Input
+                            id="country"
+                            value={shippingAddress.country}
+                            onChange={(e) =>
+                              setShippingAddress({ ...shippingAddress, country: e.target.value })
+                            }
+                            placeholder="US"
+                            data-testid="input-country"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2 pt-2">
+                        <Checkbox
+                          id="saveAddress"
+                          checked={saveAddress}
+                          onCheckedChange={(checked) => setSaveAddress(checked as boolean)}
+                          data-testid="checkbox-save-address"
+                        />
+                        <Label
+                          htmlFor="saveAddress"
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          Save this address to my profile for future orders
+                        </Label>
+                      </div>
                     </div>
 
                     <Separator className="my-4" />
@@ -432,9 +752,9 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: Order
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => setStep(1)}
+                    onClick={() => setStep(2)}
                     className="flex-1"
-                    data-testid="button-back"
+                    data-testid="button-back-shipping"
                   >
                     Back
                   </Button>
@@ -449,14 +769,14 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: Order
               </div>
             )}
 
-            {/* Step 3: Payment */}
-            {step === 3 && clientSecret && qrCode && (
+            {/* Step 4: Payment */}
+            {step === 4 && clientSecret && qrCode && productType && (
               <div className="space-y-4">
                 <Card>
                   <CardContent className="pt-6">
                     <h3 className="font-semibold mb-4">Payment</h3>
                     <div className="text-sm text-muted-foreground mb-4 space-y-1">
-                      <p><strong>Product:</strong> {productName}</p>
+                      <p><strong>Product:</strong> {getProductName()}</p>
                       <p><strong>Quantity:</strong> {quantity}</p>
                       {productType === "sticker" && <p><strong>Size:</strong> {size}</p>}
                       <p><strong>Total:</strong> ${total.toFixed(2)}</p>
@@ -480,7 +800,7 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, productType }: Order
 
                 <Button
                   variant="outline"
-                  onClick={() => setStep(2)}
+                  onClick={() => setStep(3)}
                   className="w-full"
                   data-testid="button-back-payment"
                 >

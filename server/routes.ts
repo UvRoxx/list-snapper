@@ -188,12 +188,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastName: user.lastName,
         company: user.company,
         isAdmin: user.isAdmin,
+        savedAddress: user.savedAddress,
         membership: membership ? {
           tierName: membership.tierName,
           isActive: membership.isActive,
           expiresAt: membership.expiresAt
         } : null
       });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/users/save-address", authenticateToken, async (req: any, res) => {
+    try {
+      const { address } = req.body;
+      
+      if (!address) {
+        return res.status(400).json({ message: "Address is required" });
+      }
+
+      await storage.updateUser(req.user.userId, { savedAddress: address });
+      
+      res.json({ success: true });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }

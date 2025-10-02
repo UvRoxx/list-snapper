@@ -10,6 +10,7 @@ interface User {
   lastName?: string;
   company?: string;
   isAdmin?: boolean;
+  savedAddress?: string | null;
   membership?: {
     tierName: 'FREE' | 'STANDARD' | 'PRO';
     isActive: boolean;

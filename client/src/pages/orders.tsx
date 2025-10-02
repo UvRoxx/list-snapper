@@ -19,7 +19,6 @@ export default function Orders() {
   const { user } = useAuth();
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [selectedQrCodeId, setSelectedQrCodeId] = useState<string | null>(null);
-  const [selectedProductType, setSelectedProductType] = useState<"sticker" | "yard_sign" | null>(null);
   
   const { data: orders = [] } = useQuery<any[]>({
     queryKey: ['/api/orders'],
@@ -29,23 +28,14 @@ export default function Orders() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const qrId = params.get('qrId');
-    const type = params.get('type');
     
-    if (qrId && (type === 'sticker' || type === 'yard_sign')) {
+    if (qrId) {
       setSelectedQrCodeId(qrId);
-      setSelectedProductType(type);
       setOrderDialogOpen(true);
     }
   }, []);
 
-  const handleOrderStickers = () => {
-    setSelectedProductType('sticker');
-    setSelectedQrCodeId(null);
-    setOrderDialogOpen(true);
-  };
-
-  const handleOrderYardSigns = () => {
-    setSelectedProductType('yard_sign');
+  const handleOpenOrderDialog = () => {
     setSelectedQrCodeId(null);
     setOrderDialogOpen(true);
   };
@@ -126,7 +116,7 @@ export default function Orders() {
                 </div>
 
                 <Button 
-                  onClick={handleOrderStickers}
+                  onClick={handleOpenOrderDialog}
                   className="w-full"
                   data-testid="button-order-stickers"
                 >
@@ -170,7 +160,7 @@ export default function Orders() {
                 </div>
 
                 <Button 
-                  onClick={handleOrderYardSigns}
+                  onClick={handleOpenOrderDialog}
                   className="w-full"
                   data-testid="button-order-yard-signs"
                 >
@@ -265,7 +255,6 @@ export default function Orders() {
           }
         }}
         qrCodeId={selectedQrCodeId}
-        productType={selectedProductType}
       />
     </ProtectedRoute>
   );
