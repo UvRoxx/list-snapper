@@ -17,6 +17,7 @@ import Analytics from "@/pages/analytics";
 import Orders from "@/pages/orders";
 import Settings from "@/pages/settings";
 import Checkout from "@/pages/checkout";
+import AdminDashboard from "@/pages/admin";
 
 function Router() {
   return (
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/orders" component={Orders} />
       <Route path="/settings" component={Settings} />
       <Route path="/checkout/:tier" component={Checkout} />
+      <Route path="/admin" component={AdminDashboard} />
       <Route component={NotFound} />
     </Switch>
   );

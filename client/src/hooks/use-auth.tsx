@@ -9,6 +9,7 @@ interface User {
   firstName?: string;
   lastName?: string;
   company?: string;
+  isAdmin?: boolean;
   membership?: {
     tierName: 'FREE' | 'STANDARD' | 'PRO';
     isActive: boolean;

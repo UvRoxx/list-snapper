@@ -23,15 +23,17 @@ import { useState, useEffect } from "react";
 export function Navigation() {
   const { theme, setTheme } = useTheme();
   const { user, logout } = useAuth();
-  const { i18n } = useTranslation();
+  const { i18n: i18nInstance } = useTranslation();
   const [language, setLanguage] = useState(() => 
     localStorage.getItem('language') || 'en'
   );
 
   useEffect(() => {
-    i18n.changeLanguage(language);
-    localStorage.setItem('language', language);
-  }, [language, i18n]);
+    if (i18nInstance && typeof i18nInstance.changeLanguage === 'function') {
+      i18nInstance.changeLanguage(language);
+      localStorage.setItem('language', language);
+    }
+  }, [language, i18nInstance]);
 
   const handleLanguageChange = (value: string) => {
     setLanguage(value);
@@ -62,12 +64,23 @@ export function Navigation() {
                 Pricing
               </Link>
               {user && (
-                <Link 
-                  href="/dashboard" 
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Dashboard
-                </Link>
+                <>
+                  <Link 
+                    href="/dashboard" 
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Dashboard
+                  </Link>
+                  {user.isAdmin && (
+                    <Link 
+                      href="/admin" 
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      data-testid="link-admin"
+                    >
+                      Admin
+                    </Link>
+                  )}
+                </>
               )}
             </div>
           </div>

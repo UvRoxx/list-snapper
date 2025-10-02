@@ -36,6 +36,19 @@ const authenticateToken = (req: any, res: Response, next: any) => {
   });
 };
 
+// Middleware to verify admin access
+const authenticateAdmin = async (req: any, res: Response, next: any) => {
+  try {
+    const user = await storage.getUser(req.user.userId);
+    if (!user || !user.isAdmin) {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    next();
+  } catch (error) {
+    return res.status(500).json({ message: "Error verifying admin status" });
+  }
+};
+
 // Generate unique short code
 const generateShortCode = async (): Promise<string> => {
   let shortCode;
@@ -104,6 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: user.email, 
           firstName: user.firstName,
           lastName: user.lastName,
+          isAdmin: user.isAdmin,
           membership: {
             tierName: membership.tierName,
             isActive: membership.isActive,
@@ -144,6 +158,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: user.email, 
           firstName: user.firstName,
           lastName: user.lastName,
+          isAdmin: user.isAdmin,
           membership: membership ? {
             tierName: membership.tierName,
             isActive: membership.isActive,
@@ -172,6 +187,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: user.firstName,
         lastName: user.lastName,
         company: user.company,
+        isAdmin: user.isAdmin,
         membership: membership ? {
           tierName: membership.tierName,
           isActive: membership.isActive,
@@ -451,6 +467,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/webhooks/stripe", async (req, res) => {
     // Handle Stripe webhooks for subscription updates
     res.json({ received: true });
+  });
+
+  // Admin routes
+  app.get("/api/admin/users", authenticateToken, authenticateAdmin, async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/qr-codes", authenticateToken, authenticateAdmin, async (req, res) => {
+    try {
+      const qrCodes = await storage.getAllQrCodes();
+      res.json(qrCodes);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/orders", authenticateToken, authenticateAdmin, async (req, res) => {
+    try {
+      const orders = await storage.getAllOrders();
+      res.json(orders);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/stats", authenticateToken, authenticateAdmin, async (req, res) => {
+    try {
+      const stats = await storage.getPlatformStats();
+      res.json(stats);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/admin/users/:id", authenticateToken, authenticateAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const user = await storage.updateUser(id, updates);
+      const { password, ...safeUser } = user;
+      res.json(safeUser);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/admin/users/:id", authenticateToken, authenticateAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteUser(id);
+      res.json({ message: "User deleted successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.patch("/api/admin/orders/:id", authenticateToken, authenticateAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const order = await storage.updateOrder(id, updates);
+      res.json(order);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
   });
 
   const httpServer = createServer(app);

@@ -52,6 +52,20 @@ export interface IStorage {
   getOrder(id: string): Promise<Order | undefined>;
   createOrder(order: InsertOrder & { userId: string }): Promise<Order>;
   updateOrder(id: string, updates: Partial<Order>): Promise<Order>;
+
+  // Admin methods
+  getAllUsers(): Promise<(User & { membershipTier?: string })[]>;
+  getAllQrCodes(): Promise<(QrCode & { userEmail?: string })[]>;
+  getAllOrders(): Promise<(Order & { userEmail?: string; qrCodeName?: string })[]>;
+  getPlatformStats(): Promise<{
+    totalUsers: number;
+    totalQrCodes: number;
+    totalScans: number;
+    totalOrders: number;
+    revenueThisMonth: number;
+  }>;
+  updateUser(id: string, updates: Partial<User>): Promise<User>;
+  deleteUser(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -368,6 +382,135 @@ export class DatabaseStorage implements IStorage {
       .where(eq(orders.id, id))
       .returning();
     return order;
+  }
+
+  async getAllUsers(): Promise<(User & { membershipTier?: string })[]> {
+    const result = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        password: sql<string>`''`.as('password'),
+        firstName: users.firstName,
+        lastName: users.lastName,
+        company: users.company,
+        isAdmin: users.isAdmin,
+        stripeCustomerId: users.stripeCustomerId,
+        stripeSubscriptionId: users.stripeSubscriptionId,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+        membershipTier: userMemberships.tierName,
+      })
+      .from(users)
+      .leftJoin(userMemberships, and(
+        eq(users.id, userMemberships.userId),
+        eq(userMemberships.isActive, true)
+      ))
+      .orderBy(desc(users.createdAt));
+    
+    return result;
+  }
+
+  async getAllQrCodes(): Promise<(QrCode & { userEmail?: string })[]> {
+    const result = await db
+      .select({
+        id: qrCodes.id,
+        userId: qrCodes.userId,
+        name: qrCodes.name,
+        shortCode: qrCodes.shortCode,
+        destinationUrl: qrCodes.destinationUrl,
+        isActive: qrCodes.isActive,
+        customColor: qrCodes.customColor,
+        customBgColor: qrCodes.customBgColor,
+        logoUrl: qrCodes.logoUrl,
+        scanCount: qrCodes.scanCount,
+        createdAt: qrCodes.createdAt,
+        updatedAt: qrCodes.updatedAt,
+        userEmail: users.email,
+      })
+      .from(qrCodes)
+      .leftJoin(users, eq(qrCodes.userId, users.id))
+      .orderBy(desc(qrCodes.createdAt));
+    
+    return result;
+  }
+
+  async getAllOrders(): Promise<(Order & { userEmail?: string; qrCodeName?: string })[]> {
+    const result = await db
+      .select({
+        id: orders.id,
+        userId: orders.userId,
+        qrCodeId: orders.qrCodeId,
+        productType: orders.productType,
+        quantity: orders.quantity,
+        size: orders.size,
+        total: orders.total,
+        status: orders.status,
+        stripePaymentIntentId: orders.stripePaymentIntentId,
+        printifyOrderId: orders.printifyOrderId,
+        shippingAddress: orders.shippingAddress,
+        createdAt: orders.createdAt,
+        updatedAt: orders.updatedAt,
+        userEmail: users.email,
+        qrCodeName: qrCodes.name,
+      })
+      .from(orders)
+      .leftJoin(users, eq(orders.userId, users.id))
+      .leftJoin(qrCodes, eq(orders.qrCodeId, qrCodes.id))
+      .orderBy(desc(orders.createdAt));
+    
+    return result;
+  }
+
+  async getPlatformStats(): Promise<{
+    totalUsers: number;
+    totalQrCodes: number;
+    totalScans: number;
+    totalOrders: number;
+    revenueThisMonth: number;
+  }> {
+    const [userCount] = await db.select({ count: count() }).from(users);
+    const [qrCodeCount] = await db.select({ count: count() }).from(qrCodes);
+    const [scanCount] = await db.select({ count: count() }).from(qrCodeScans);
+    const [orderCount] = await db.select({ count: count() }).from(orders);
+
+    const firstDayOfMonth = new Date();
+    firstDayOfMonth.setDate(1);
+    firstDayOfMonth.setHours(0, 0, 0, 0);
+
+    const monthlyOrders = await db
+      .select({ total: orders.total })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.status, 'delivered'),
+          sql`${orders.createdAt} >= ${firstDayOfMonth}`
+        )
+      );
+
+    const revenueThisMonth = monthlyOrders.reduce((sum, order) => 
+      sum + parseFloat(order.total?.toString() || '0'), 0
+    );
+
+    return {
+      totalUsers: userCount.count,
+      totalQrCodes: qrCodeCount.count,
+      totalScans: scanCount.count,
+      totalOrders: orderCount.count,
+      revenueThisMonth,
+    };
+  }
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
   }
 }
 
