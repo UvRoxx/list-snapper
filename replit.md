@@ -102,7 +102,8 @@ Preferred communication style: Simple, everyday language.
 
 *QR Codes:*
 - User-owned QR codes with short codes for redirection
-- Destination URLs (dynamic linking)
+- Destination URLs (dynamic linking with edit capability)
+- URL change history tracking (qr_code_url_history table)
 - Customization options (colors, logos)
 - Active/inactive status
 - Scan count tracking
@@ -115,10 +116,12 @@ Preferred communication style: Simple, everyday language.
 
 *Orders:*
 - Product orders (stickers, yard signs)
+- Shipping restrictions: Stickers available for USA/Canada/UK, Yard signs USA-only
 - Status tracking (pending, processing, shipped, delivered, cancelled)
-- Shipping address information
+- Shipping address information with country selection
 - Order status history for audit trail
 - Stripe payment integration
+- Country normalization for legacy address data
 
 **ORM Choice: Drizzle**
 - Type-safe database queries
