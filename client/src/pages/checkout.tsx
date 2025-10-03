@@ -148,7 +148,7 @@ export default function Checkout() {
 
   if (loading || !clientSecret) {
     return (
-      <ProtectedRoute>
+      <ProtectedRoute redirectTo="/register" message="Please sign up to start your free trial and upgrade your plan.">
         <div className="min-h-screen bg-background">
           <Navigation />
           <div className="flex items-center justify-center min-h-[50vh]">
@@ -160,7 +160,7 @@ export default function Checkout() {
   }
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute redirectTo="/register" message="Please sign up to start your free trial and upgrade your plan.">
       <div className="min-h-screen bg-background">
         <Navigation />
         

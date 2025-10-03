@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Navigation } from "@/components/navigation";
 import { Button } from "@/components/ui/button";
@@ -6,9 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { QrCode } from "lucide-react";
+import { SiGoogle, SiFacebook } from "react-icons/si";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -17,6 +19,22 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Handle OAuth callback with token
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const userId = params.get('userId');
+    
+    if (token && userId) {
+      localStorage.setItem('auth-token', token);
+      toast({
+        title: "Success",
+        description: "Successfully logged in with social account!"
+      });
+      setLocation('/dashboard');
+    }
+  }, [setLocation, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,6 +129,38 @@ export default function Login() {
                   {isLoading ? "Signing In..." : "Sign In"}
                 </Button>
               </form>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <Separator />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or continue with
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => window.location.href = '/api/auth/google'}
+                  data-testid="button-google-login"
+                >
+                  <SiGoogle className="mr-2 h-4 w-4" />
+                  Google
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => window.location.href = '/api/auth/facebook'}
+                  data-testid="button-facebook-login"
+                >
+                  <SiFacebook className="mr-2 h-4 w-4" />
+                  Facebook
+                </Button>
+              </div>
 
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">

@@ -6,6 +6,9 @@ import Stripe from "stripe";
 import { nanoid } from "nanoid";
 import QRCode from "qrcode";
 import { UAParser } from "ua-parser-js";
+import passport from "passport";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import { Strategy as FacebookStrategy } from "passport-facebook";
 import { storage } from "./storage";
 import { insertUserSchema, loginSchema, insertQrCodeSchema, insertOrderSchema } from "@shared/schema";
 import { z } from "zod";
@@ -19,6 +22,86 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret';
+
+// Configure Passport with Google OAuth
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: "/api/auth/google/callback"
+  },
+  async (accessToken: string, refreshToken: string, profile: any, done: any) => {
+    try {
+      // Check if user exists
+      let user = await storage.getUserByEmail(profile.emails[0].value);
+      
+      if (!user) {
+        // Create new user
+        user = await storage.createUser({
+          email: profile.emails[0].value,
+          password: await bcrypt.hash(nanoid(32), 10), // Random password for OAuth users
+          firstName: profile.name?.givenName || profile.displayName || '',
+          lastName: profile.name?.familyName || ''
+        });
+
+        // Create default FREE membership
+        await storage.createUserMembership({
+          userId: user.id,
+          tierName: 'FREE',
+          isActive: true,
+          expiresAt: null
+        });
+      }
+      
+      done(null, user);
+    } catch (error) {
+      done(error, null);
+    }
+  }));
+}
+
+// Configure Passport with Facebook OAuth
+if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
+  passport.use(new FacebookStrategy({
+    clientID: process.env.FACEBOOK_APP_ID,
+    clientSecret: process.env.FACEBOOK_APP_SECRET,
+    callbackURL: "/api/auth/facebook/callback",
+    profileFields: ['id', 'emails', 'name', 'displayName']
+  },
+  async (accessToken: string, refreshToken: string, profile: any, done: any) => {
+    try {
+      // Check if user exists
+      const email = profile.emails?.[0]?.value;
+      if (!email) {
+        return done(new Error('No email provided by Facebook'), null);
+      }
+
+      let user = await storage.getUserByEmail(email);
+      
+      if (!user) {
+        // Create new user
+        user = await storage.createUser({
+          email,
+          password: await bcrypt.hash(nanoid(32), 10), // Random password for OAuth users
+          firstName: profile.name?.givenName || profile.displayName || '',
+          lastName: profile.name?.familyName || ''
+        });
+
+        // Create default FREE membership
+        await storage.createUserMembership({
+          userId: user.id,
+          tierName: 'FREE',
+          isActive: true,
+          expiresAt: null
+        });
+      }
+      
+      done(null, user);
+    } catch (error) {
+      done(error, null);
+    }
+  }));
+}
 
 // Middleware to verify JWT token
 const authenticateToken = (req: any, res: Response, next: any) => {
@@ -76,6 +159,8 @@ const parseDeviceInfo = (userAgent: string) => {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize Passport
+  app.use(passport.initialize());
   
   // Authentication routes
   app.post("/api/auth/register", async (req, res) => {
@@ -199,6 +284,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ message: error.message });
     }
   });
+
+  // Google OAuth routes
+  app.get("/api/auth/google",
+    passport.authenticate('google', { 
+      scope: ['profile', 'email'],
+      session: false 
+    })
+  );
+
+  app.get("/api/auth/google/callback",
+    passport.authenticate('google', { session: false, failureRedirect: '/login' }),
+    async (req: any, res) => {
+      try {
+        const user = req.user;
+        const membership = await storage.getUserMembership(user.id);
+
+        const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
+          expiresIn: '24h'
+        });
+
+        // Redirect to frontend with token
+        res.redirect(`/?token=${token}&userId=${user.id}`);
+      } catch (error: any) {
+        res.redirect('/login?error=auth_failed');
+      }
+    }
+  );
+
+  // Facebook OAuth routes
+  app.get("/api/auth/facebook",
+    passport.authenticate('facebook', { 
+      scope: ['email'],
+      session: false 
+    })
+  );
+
+  app.get("/api/auth/facebook/callback",
+    passport.authenticate('facebook', { session: false, failureRedirect: '/login' }),
+    async (req: any, res) => {
+      try {
+        const user = req.user;
+        const membership = await storage.getUserMembership(user.id);
+
+        const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
+          expiresIn: '24h'
+        });
+
+        // Redirect to frontend with token
+        res.redirect(`/?token=${token}&userId=${user.id}`);
+      } catch (error: any) {
+        res.redirect('/login?error=auth_failed');
+      }
+    }
+  );
 
   app.post("/api/users/save-address", authenticateToken, async (req: any, res) => {
     try {

@@ -30,9 +30,11 @@ export default function Pricing() {
                   </div>
                   <p className="text-muted-foreground">Perfect for trying out ListSnapper</p>
                 </div>
-                <Button variant="secondary" className="w-full mb-6" data-testid="button-select-free">
-                  Get Started
-                </Button>
+                <Link href="/register">
+                  <Button variant="secondary" className="w-full mb-6" data-testid="button-select-free">
+                    Get Started
+                  </Button>
+                </Link>
                 <div className="space-y-3">
                   <div className="flex items-start space-x-3">
                     <Check className="h-5 w-5 text-primary mt-0.5" />
