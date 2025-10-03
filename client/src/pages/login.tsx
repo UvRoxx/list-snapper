@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Navigation } from "@/components/navigation";
 import { Button } from "@/components/ui/button";
@@ -19,22 +19,6 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  // Handle OAuth callback with token
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    const userId = params.get('userId');
-    
-    if (token && userId) {
-      localStorage.setItem('auth-token', token);
-      toast({
-        title: "Success",
-        description: "Successfully logged in with social account!"
-      });
-      setLocation('/dashboard');
-    }
-  }, [setLocation, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

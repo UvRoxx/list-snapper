@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { useState } from "react";
+import { Link } from "wouter";
 import { Navigation } from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,6 @@ import { SiGoogle, SiFacebook } from "react-icons/si";
 export default function Register() {
   const { register } = useAuth();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -23,22 +22,6 @@ export default function Register() {
     company: ""
   });
   const [isLoading, setIsLoading] = useState(false);
-
-  // Handle OAuth callback with token
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    const userId = params.get('userId');
-    
-    if (token && userId) {
-      localStorage.setItem('auth-token', token);
-      toast({
-        title: "Success",
-        description: "Successfully signed up with social account!"
-      });
-      setLocation('/dashboard');
-    }
-  }, [setLocation, toast]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({

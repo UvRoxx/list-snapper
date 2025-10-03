@@ -32,13 +32,19 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   },
   async (accessToken: string, refreshToken: string, profile: any, done: any) => {
     try {
+      // Check if email is available
+      const email = profile.emails?.[0]?.value;
+      if (!email) {
+        return done(new Error('No email provided by Google'), null);
+      }
+
       // Check if user exists
-      let user = await storage.getUserByEmail(profile.emails[0].value);
+      let user = await storage.getUserByEmail(email);
       
       if (!user) {
         // Create new user
         user = await storage.createUser({
-          email: profile.emails[0].value,
+          email,
           password: await bcrypt.hash(nanoid(32), 10), // Random password for OAuth users
           firstName: profile.name?.givenName || profile.displayName || '',
           lastName: profile.name?.familyName || ''
@@ -105,8 +111,14 @@ if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
 
 // Middleware to verify JWT token
 const authenticateToken = (req: any, res: Response, next: any) => {
+  // Check Authorization header first, then fall back to cookie
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  let token = authHeader && authHeader.split(' ')[1];
+  
+  // If no token in header, check cookie
+  if (!token && req.cookies) {
+    token = req.cookies['auth-token'];
+  }
 
   if (!token) {
     return res.sendStatus(401);
@@ -294,7 +306,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   app.get("/api/auth/google/callback",
-    passport.authenticate('google', { session: false, failureRedirect: '/login' }),
+    passport.authenticate('google', { session: false, failureRedirect: '/login?error=auth_failed' }),
     async (req: any, res) => {
       try {
         const user = req.user;
@@ -304,8 +316,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           expiresIn: '24h'
         });
 
-        // Redirect to frontend with token
-        res.redirect(`/?token=${token}&userId=${user.id}`);
+        // Set HttpOnly cookie for security
+        res.cookie('auth-token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        });
+
+        // Redirect to dashboard
+        res.redirect('/dashboard');
       } catch (error: any) {
         res.redirect('/login?error=auth_failed');
       }
@@ -321,7 +341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   app.get("/api/auth/facebook/callback",
-    passport.authenticate('facebook', { session: false, failureRedirect: '/login' }),
+    passport.authenticate('facebook', { session: false, failureRedirect: '/login?error=auth_failed' }),
     async (req: any, res) => {
       try {
         const user = req.user;
@@ -331,8 +351,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           expiresIn: '24h'
         });
 
-        // Redirect to frontend with token
-        res.redirect(`/?token=${token}&userId=${user.id}`);
+        // Set HttpOnly cookie for security
+        res.cookie('auth-token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        });
+
+        // Redirect to dashboard
+        res.redirect('/dashboard');
       } catch (error: any) {
         res.redirect('/login?error=auth_failed');
       }
