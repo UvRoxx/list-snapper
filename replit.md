@@ -136,13 +136,24 @@ Preferred communication style: Simple, everyday language.
 - Token expiration and refresh not explicitly implemented
 - Bearer token in Authorization header
 
+**OAuth Authentication:**
+- Google OAuth 2.0 integration via passport-google-oauth20
+- Facebook OAuth integration via passport-facebook
+- OAuth buttons on login and register pages
+- Callback routes generate JWT tokens matching existing auth system
+- OAuth users created with random passwords (social login only)
+- Requires environment variables: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FACEBOOK_APP_ID, FACEBOOK_APP_SECRET
+- Callback URLs: /api/auth/google/callback and /api/auth/facebook/callback
+- After OAuth success, users redirected to homepage with token query parameter
+
 **User Roles:**
 - Standard users with tiered memberships
-- Admin users with elevated privileges
+- Admin users with elevated privileges (dev@a.com with password "password" for testing)
 - Middleware guards for admin-only routes
 
 **Password Security:**
 - bcryptjs for hashing with salt rounds
+- Minimum 6 characters password requirement
 - No password reset flow currently implemented
 
 ### External Dependencies
