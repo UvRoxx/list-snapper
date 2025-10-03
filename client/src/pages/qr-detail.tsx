@@ -9,6 +9,12 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, 
@@ -25,7 +31,10 @@ import {
   Zap,
   Edit,
   History,
-  Clock
+  Clock,
+  Palette,
+  Copy,
+  Check
 } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
@@ -49,6 +58,11 @@ export default function QrDetail() {
   const { toast } = useToast();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [newDestinationUrl, setNewDestinationUrl] = useState("");
+  const [editColorsDialogOpen, setEditColorsDialogOpen] = useState(false);
+  const [newQrColor, setNewQrColor] = useState("");
+  const [newBgColor, setNewBgColor] = useState("");
+  const [copiedShortCode, setCopiedShortCode] = useState(false);
+  const [copiedFullUrl, setCopiedFullUrl] = useState(false);
 
   const hasAnalyticsAccess = user?.membership?.tierName === 'STANDARD' || user?.membership?.tierName === 'PRO';
 
@@ -69,7 +83,7 @@ export default function QrDetail() {
 
   const updateUrlMutation = useMutation({
     mutationFn: async (url: string) => {
-      return await apiRequest(`/api/qr-codes/${id}`, 'PUT', { destinationUrl: url });
+      return await apiRequest('PUT', `/api/qr-codes/${id}`, { destinationUrl: url });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/qr-codes/${id}`] });
@@ -84,6 +98,30 @@ export default function QrDetail() {
       toast({
         title: "Error",
         description: "Failed to update destination URL",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateColorsMutation = useMutation({
+    mutationFn: async ({ qrColor, bgColor }: { qrColor: string; bgColor: string }) => {
+      return await apiRequest('PUT', `/api/qr-codes/${id}`, { 
+        customColor: qrColor,
+        customBgColor: bgColor 
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/qr-codes/${id}`] });
+      toast({
+        title: "Success",
+        description: "QR code colors updated successfully",
+      });
+      setEditColorsDialogOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update QR code colors",
         variant: "destructive",
       });
     },
@@ -161,6 +199,31 @@ export default function QrDetail() {
     updateUrlMutation.mutate(newDestinationUrl);
   };
 
+  const handleEditColors = () => {
+    setNewQrColor(qrCode?.customColor || "#000000");
+    setNewBgColor(qrCode?.customBgColor || "#FFFFFF");
+    setEditColorsDialogOpen(true);
+  };
+
+  const handleUpdateColors = () => {
+    updateColorsMutation.mutate({ 
+      qrColor: newQrColor, 
+      bgColor: newBgColor 
+    });
+  };
+
+  const handleCopyShortCode = async () => {
+    await navigator.clipboard.writeText(qrCode?.shortCode || "");
+    setCopiedShortCode(true);
+    setTimeout(() => setCopiedShortCode(false), 2000);
+  };
+
+  const handleCopyFullUrl = async () => {
+    await navigator.clipboard.writeText(fullUrl);
+    setCopiedFullUrl(true);
+    setTimeout(() => setCopiedFullUrl(false), 2000);
+  };
+
   const topLocations = analytics?.locationBreakdown ? 
     Object.entries(analytics.locationBreakdown)
       .map(([country, count]: [string, any]) => ({ country, count }))
@@ -216,20 +279,70 @@ export default function QrDetail() {
                   <div className="space-y-3">
                     <div>
                       <span className="text-sm text-muted-foreground">Short Code</span>
-                      <p className="font-mono font-semibold" data-testid="text-short-code">{qrCode.shortCode}</p>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-2 group cursor-pointer">
+                              <p className="font-mono font-semibold" data-testid="text-short-code">
+                                {qrCode.shortCode}
+                              </p>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={handleCopyShortCode}
+                                data-testid="button-copy-short-code"
+                              >
+                                {copiedShortCode ? (
+                                  <Check className="h-3 w-3 text-green-500" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
+                              </Button>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Click to copy short code</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                     <div>
                       <span className="text-sm text-muted-foreground">Full URL</span>
-                      <a 
-                        href={fullUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline flex items-center text-sm break-all"
-                        data-testid="link-full-url"
-                      >
-                        {fullUrl}
-                        <ExternalLink className="h-3 w-3 ml-1 flex-shrink-0" />
-                      </a>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-2 group">
+                              <a 
+                                href={fullUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline flex items-center text-sm break-all"
+                                data-testid="link-full-url"
+                              >
+                                {fullUrl}
+                                <ExternalLink className="h-3 w-3 ml-1 flex-shrink-0" />
+                              </a>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                onClick={handleCopyFullUrl}
+                                data-testid="button-copy-full-url"
+                              >
+                                {copiedFullUrl ? (
+                                  <Check className="h-3 w-3 text-green-500" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
+                              </Button>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Click icon to copy full URL</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                   </div>
 
@@ -317,27 +430,41 @@ export default function QrDetail() {
                       <ExternalLink className="h-4 w-4 ml-1 flex-shrink-0" />
                     </a>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <span className="text-sm text-muted-foreground">QR Color</span>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <div 
-                          className="w-8 h-8 rounded border" 
-                          style={{ backgroundColor: qrCode.customColor ?? undefined }}
-                          data-testid="div-qr-color"
-                        ></div>
-                        <span className="font-mono text-sm">{qrCode.customColor}</span>
-                      </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-muted-foreground">QR Code Colors</span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={handleEditColors}
+                        data-testid="button-edit-colors"
+                      >
+                        <Palette className="h-4 w-4 mr-1" />
+                        Edit Colors
+                      </Button>
                     </div>
-                    <div>
-                      <span className="text-sm text-muted-foreground">Background Color</span>
-                      <div className="flex items-center space-x-2 mt-1">
-                        <div 
-                          className="w-8 h-8 rounded border" 
-                          style={{ backgroundColor: qrCode.customBgColor ?? undefined }}
-                          data-testid="div-bg-color"
-                        ></div>
-                        <span className="font-mono text-sm">{qrCode.customBgColor}</span>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-xs text-muted-foreground">QR Color</span>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <div 
+                            className="w-8 h-8 rounded border" 
+                            style={{ backgroundColor: qrCode.customColor ?? undefined }}
+                            data-testid="div-qr-color"
+                          ></div>
+                          <span className="font-mono text-sm">{qrCode.customColor}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted-foreground">Background Color</span>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <div 
+                            className="w-8 h-8 rounded border" 
+                            style={{ backgroundColor: qrCode.customBgColor ?? undefined }}
+                            data-testid="div-bg-color"
+                          ></div>
+                          <span className="font-mono text-sm">{qrCode.customBgColor}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -567,6 +694,110 @@ export default function QrDetail() {
                 data-testid="button-save-url"
               >
                 {updateUrlMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Colors Dialog */}
+        <Dialog open={editColorsDialogOpen} onOpenChange={setEditColorsDialogOpen}>
+          <DialogContent data-testid="dialog-edit-colors">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Palette className="h-5 w-5" />
+                Edit QR Code Colors
+              </DialogTitle>
+              <DialogDescription>
+                Customize the colors of your QR code. The QR code will update automatically.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-6 py-4">
+              <div className="space-y-3">
+                <Label htmlFor="qr-color">QR Code Color</Label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    id="qr-color"
+                    value={newQrColor}
+                    onChange={(e) => setNewQrColor(e.target.value)}
+                    className="h-12 w-20 rounded border cursor-pointer"
+                    data-testid="input-qr-color"
+                  />
+                  <Input
+                    value={newQrColor}
+                    onChange={(e) => setNewQrColor(e.target.value)}
+                    placeholder="#000000"
+                    className="font-mono"
+                    data-testid="input-qr-color-hex"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  The main color of the QR code pattern
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <Label htmlFor="bg-color">Background Color</Label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    id="bg-color"
+                    value={newBgColor}
+                    onChange={(e) => setNewBgColor(e.target.value)}
+                    className="h-12 w-20 rounded border cursor-pointer"
+                    data-testid="input-bg-color"
+                  />
+                  <Input
+                    value={newBgColor}
+                    onChange={(e) => setNewBgColor(e.target.value)}
+                    placeholder="#FFFFFF"
+                    className="font-mono"
+                    data-testid="input-bg-color-hex"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  The background color behind the QR code
+                </p>
+              </div>
+
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="text-sm font-medium mb-2">Preview:</p>
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-16 h-16 rounded border-2"
+                    style={{ 
+                      backgroundColor: newBgColor,
+                      borderColor: newQrColor 
+                    }}
+                  >
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div 
+                        className="w-8 h-8 rounded"
+                        style={{ backgroundColor: newQrColor }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    <p className="font-mono">{newQrColor}</p>
+                    <p className="font-mono">{newBgColor}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setEditColorsDialogOpen(false)}
+                data-testid="button-cancel-colors"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUpdateColors}
+                disabled={updateColorsMutation.isPending}
+                data-testid="button-save-colors"
+              >
+                {updateColorsMutation.isPending ? "Saving..." : "Save Colors"}
               </Button>
             </DialogFooter>
           </DialogContent>

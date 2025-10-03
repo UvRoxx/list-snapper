@@ -19,6 +19,7 @@ Preferred communication style: Simple, everyday language.
 - TanStack Query (React Query) for server state management
 - Tailwind CSS with custom theming for styling
 - shadcn/ui component library built on Radix UI primitives
+- Tooltip components for enhanced UX
 
 **Design System:**
 - Primary color: Mint green (#22c55e / hsl(142, 71%, 45%))
@@ -26,6 +27,7 @@ Preferred communication style: Simple, everyday language.
 - CSS variables for theming consistency
 - Inter font family as primary typeface
 - Glassmorphism effects for modern UI elements
+- Interactive tooltips with copy-to-clipboard functionality
 
 **State Management:**
 - React Query for API data fetching and caching
@@ -40,13 +42,13 @@ Preferred communication style: Simple, everyday language.
 
 **Key Pages:**
 - Landing page with hero section and feature showcase
-- Authentication (Login/Register)
+- Authentication (Login/Register) with modal error dialogs
 - Dashboard for QR code management
-- QR code creation and detail views
+- QR code creation and detail views with color customization
 - Analytics dashboard with charts and metrics
 - Orders management
 - Settings/Profile management
-- Admin dashboard for user and order management
+- Professional admin dashboard with comprehensive analytics and filters
 - Pricing page with subscription tiers
 - Checkout flow with Stripe integration
 
@@ -68,9 +70,12 @@ Preferred communication style: Simple, everyday language.
 
 **Authentication Flow:**
 - JWT token-based authentication
-- Token stored in localStorage on client
+- Dual auth support: Bearer tokens in Authorization header OR HttpOnly cookies
+- Token stored in localStorage on client (for backward compatibility)
+- Secure HttpOnly cookies for OAuth and enhanced security
 - Authorization header for API requests
 - Session validation on protected routes
+- Modal dialogs for authentication errors (replacing toast notifications)
 
 **Core Services:**
 - User management and authentication
@@ -104,7 +109,10 @@ Preferred communication style: Simple, everyday language.
 - User-owned QR codes with short codes for redirection
 - Destination URLs (dynamic linking with edit capability)
 - URL change history tracking (qr_code_url_history table)
-- Customization options (colors, logos)
+- Customizable QR code and background colors (customColor, customBgColor fields)
+- Visual color picker and hex input for color editing
+- Live preview of color changes before saving
+- Copy-to-clipboard for short codes and full URLs with tooltips
 - Active/inactive status
 - Scan count tracking
 
@@ -200,3 +208,15 @@ Preferred communication style: Simple, everyday language.
 - esbuild for backend bundling
 - Production build outputs to `dist/` directory
 - Environment variables for configuration (DATABASE_URL, Stripe keys, JWT secret)
+
+## Recent Changes
+
+### October 3, 2025
+- **Enhanced Admin Dashboard**: Redesigned with professional layout including primary/secondary metrics, top performers section, recent activity, and advanced search/filtering capabilities
+- **QR Code Color Customization**: Added visual color picker with hex input for customizing QR code colors and background
+- **Improved UX Elements**: 
+  - Added tooltips with copy-to-clipboard for QR short codes and full URLs
+  - Replaced toast notifications with professional modal dialogs for authentication errors
+  - Enhanced error messages with user-friendly language
+- **OAuth Security**: Migrated from URL query parameters to HttpOnly cookies for OAuth tokens
+- **Dual Authentication**: Maintained backward compatibility with localStorage tokens while supporting secure cookie-based auth
