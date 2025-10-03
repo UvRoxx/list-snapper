@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, Link, useLocation } from "wouter";
 import { Navigation } from "@/components/navigation";
 import { ProtectedRoute } from "@/components/protected-route";
@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, 
   Download, 
@@ -18,12 +22,16 @@ import {
   Package,
   FileText,
   Lock,
-  Zap
+  Zap,
+  Edit,
+  History,
+  Clock
 } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
-import type { QrCode } from "@shared/schema";
+import type { QrCode, QrCodeUrlHistory } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface Analytics {
   totalScans: number;
@@ -38,6 +46,9 @@ export default function QrDetail() {
   const [, setLocation] = useLocation();
   const [qrDataUrl, setQrDataUrl] = useState("");
   const { user } = useAuth();
+  const { toast } = useToast();
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [newDestinationUrl, setNewDestinationUrl] = useState("");
 
   const hasAnalyticsAccess = user?.membership?.tierName === 'STANDARD' || user?.membership?.tierName === 'PRO';
 
@@ -49,6 +60,33 @@ export default function QrDetail() {
   const { data: analytics } = useQuery<Analytics>({
     queryKey: [`/api/qr-codes/${id}/analytics`],
     enabled: !!id && hasAnalyticsAccess
+  });
+
+  const { data: urlHistory = [] } = useQuery<QrCodeUrlHistory[]>({
+    queryKey: [`/api/qr-codes/${id}/url-history`],
+    enabled: !!id
+  });
+
+  const updateUrlMutation = useMutation({
+    mutationFn: async (url: string) => {
+      return await apiRequest(`/api/qr-codes/${id}`, 'PUT', { destinationUrl: url });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/qr-codes/${id}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/qr-codes/${id}/url-history`] });
+      toast({
+        title: "Success",
+        description: "Destination URL updated successfully",
+      });
+      setEditDialogOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update destination URL",
+        variant: "destructive",
+      });
+    },
   });
 
   useEffect(() => {
@@ -104,6 +142,23 @@ export default function QrDetail() {
     link.download = `qr-${qrCode.shortCode}.${format}`;
     link.href = qrDataUrl;
     link.click();
+  };
+
+  const handleEditUrl = () => {
+    setNewDestinationUrl(qrCode?.destinationUrl || "");
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdateUrl = () => {
+    if (!newDestinationUrl || !newDestinationUrl.startsWith('http')) {
+      toast({
+        title: "Invalid URL",
+        description: "Please enter a valid URL starting with http:// or https://",
+        variant: "destructive",
+      });
+      return;
+    }
+    updateUrlMutation.mutate(newDestinationUrl);
   };
 
   const topLocations = analytics?.locationBreakdown ? 
@@ -239,7 +294,18 @@ export default function QrDetail() {
                     <p className="font-semibold" data-testid="text-qr-name">{qrCode.name}</p>
                   </div>
                   <div>
-                    <span className="text-sm text-muted-foreground">Destination URL</span>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm text-muted-foreground">Destination URL</span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={handleEditUrl}
+                        data-testid="button-edit-url"
+                      >
+                        <Edit className="h-4 w-4 mr-1" />
+                        Edit
+                      </Button>
+                    </div>
                     <a 
                       href={qrCode.destinationUrl} 
                       target="_blank" 
@@ -418,9 +484,93 @@ export default function QrDetail() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* URL History Card */}
+              {urlHistory.length > 0 && (
+                <Card data-testid="card-url-history">
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <History className="h-5 w-5 mr-2" />
+                      URL History
+                    </CardTitle>
+                    <CardDescription>
+                      Previous destination URLs for this QR code
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {urlHistory.map((entry) => (
+                        <div 
+                          key={entry.id} 
+                          className="flex items-start justify-between p-3 bg-muted/50 rounded-lg"
+                          data-testid={`history-entry-${entry.id}`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <a 
+                              href={entry.destinationUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-sm text-primary hover:underline break-all block"
+                            >
+                              {entry.destinationUrl}
+                            </a>
+                            <div className="flex items-center text-xs text-muted-foreground mt-1">
+                              <Clock className="h-3 w-3 mr-1" />
+                              {new Date(entry.changedAt).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Edit URL Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent data-testid="dialog-edit-url">
+            <DialogHeader>
+              <DialogTitle>Edit Destination URL</DialogTitle>
+              <DialogDescription>
+                Update where this QR code redirects to. The previous URL will be saved in history.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="destination-url">Destination URL</Label>
+                <Input
+                  id="destination-url"
+                  value={newDestinationUrl}
+                  onChange={(e) => setNewDestinationUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  data-testid="input-new-url"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Must start with http:// or https://
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setEditDialogOpen(false)}
+                data-testid="button-cancel-edit"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUpdateUrl}
+                disabled={updateUrlMutation.isPending}
+                data-testid="button-save-url"
+              >
+                {updateUrlMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </ProtectedRoute>
   );
