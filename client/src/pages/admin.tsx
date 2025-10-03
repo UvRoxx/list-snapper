@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Select,
   SelectContent,
@@ -26,6 +26,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
 
 type User = {
   id: string;
@@ -69,8 +71,21 @@ type PlatformStats = {
 
 export default function AdminDashboard() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const [orderToUpdate, setOrderToUpdate] = useState<{ id: string; status: string } | null>(null);
+
+  useEffect(() => {
+    if (user && !user.isAdmin) {
+      toast({
+        title: "Access Denied",
+        description: "You do not have admin privileges to access this page.",
+        variant: "destructive",
+      });
+      setLocation("/dashboard");
+    }
+  }, [user, setLocation, toast]);
 
   const { data: stats, isLoading: statsLoading } = useQuery<PlatformStats>({
     queryKey: ['/api/admin/stats'],
