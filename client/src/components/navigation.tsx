@@ -135,7 +135,7 @@ export function Navigation() {
                     <DropdownMenuItem asChild>
                       <Link href="/settings">Settings</Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={logout}>
+                    <DropdownMenuItem onClick={() => logout()} data-testid="button-logout">
                       Logout
                     </DropdownMenuItem>
                   </DropdownMenuContent>

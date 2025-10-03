@@ -23,7 +23,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<any>;
   register: (userData: any) => Promise<any>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -37,8 +37,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['/api/auth/me'],
-    enabled: !!token,
+    enabled: true, // Always try to fetch - backend will check both token and cookie
     retry: false,
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/auth/me', {
+          credentials: 'include', // Important: send cookies
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        
+        if (response.status === 401) {
+          return null; // Not authenticated
+        }
+        
+        if (!response.ok) {
+          throw new Error(`${response.status}: ${response.statusText}`);
+        }
+        
+        return response.json();
+      } catch (error) {
+        return null;
+      }
+    }
   });
 
   const loginMutation = useMutation({
@@ -69,10 +89,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      // Call backend to clear cookie
+      await apiRequest('POST', '/api/auth/logout');
+    } catch (error) {
+      // Continue with logout even if backend call fails
+      console.error('Logout error:', error);
+    }
+    
+    // Clear local storage and state
     localStorage.removeItem('auth-token');
     setToken(null);
+    
+    // Invalidate all queries and clear cache
+    queryClient.invalidateQueries();
     queryClient.clear();
+    
+    // Redirect to home
     setLocation('/');
   };
 

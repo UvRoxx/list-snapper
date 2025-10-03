@@ -139,12 +139,15 @@ Preferred communication style: Simple, everyday language.
 **OAuth Authentication:**
 - Google OAuth 2.0 integration via passport-google-oauth20
 - Facebook OAuth integration via passport-facebook
-- OAuth buttons on login and register pages
+- OAuth buttons on login and register pages with social media branding
 - Callback routes generate JWT tokens matching existing auth system
 - OAuth users created with random passwords (social login only)
 - Requires environment variables: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FACEBOOK_APP_ID, FACEBOOK_APP_SECRET
 - Callback URLs: /api/auth/google/callback and /api/auth/facebook/callback
-- After OAuth success, users redirected to homepage with token query parameter
+- After OAuth success, users redirected directly to /dashboard
+- Authentication via secure HttpOnly cookies (sameSite: 'lax', secure in production)
+- Dual auth support: Bearer tokens in Authorization header OR HttpOnly cookies
+- Logout endpoint clears both localStorage tokens and HttpOnly cookies
 
 **User Roles:**
 - Standard users with tiered memberships

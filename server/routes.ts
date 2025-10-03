@@ -207,6 +207,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         expiresIn: '24h'
       });
 
+      // Set HttpOnly cookie for security
+      res.cookie('auth-token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      });
+
       res.json({ 
         token, 
         user: { 
@@ -247,6 +255,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get user's membership
       const membership = await storage.getUserMembership(user.id);
+
+      // Set HttpOnly cookie for security
+      res.cookie('auth-token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      });
 
       res.json({ 
         token, 
@@ -295,6 +311,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
+  });
+
+  app.post("/api/auth/logout", (req: any, res) => {
+    // Clear the auth-token cookie
+    res.clearCookie('auth-token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    });
+    
+    res.json({ message: "Logged out successfully" });
   });
 
   // Google OAuth routes
