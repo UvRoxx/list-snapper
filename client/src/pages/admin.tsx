@@ -5,8 +5,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Users, QrCode, ShoppingCart, DollarSign, Trash2 } from "lucide-react";
+import { 
+  Users, 
+  QrCode, 
+  ShoppingCart, 
+  DollarSign, 
+  Trash2, 
+  TrendingUp, 
+  Activity,
+  Package,
+  Eye,
+  Search,
+  Download,
+  MoreVertical,
+  UserCheck,
+  AlertCircle
+} from "lucide-react";
 import { format } from "date-fns";
 import {
   AlertDialog,
@@ -18,7 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Select,
   SelectContent,
@@ -26,8 +42,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
+import { Navigation } from "@/components/navigation";
 
 type User = {
   id: string;
@@ -75,6 +98,8 @@ export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const [orderToUpdate, setOrderToUpdate] = useState<{ id: string; status: string } | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   useEffect(() => {
     if (user && !user.isAdmin) {
@@ -103,9 +128,71 @@ export default function AdminDashboard() {
     queryKey: ['/api/admin/orders'],
   });
 
+  // Computed metrics
+  const activeUsers = useMemo(() => 
+    users.filter(u => u.membershipTier !== 'FREE').length, 
+    [users]
+  );
+
+  const activeQrCodes = useMemo(() => 
+    qrCodes.filter(qr => qr.isActive).length, 
+    [qrCodes]
+  );
+
+  const pendingOrders = useMemo(() => 
+    orders.filter(o => o.status === 'pending' || o.status === 'processing').length, 
+    [orders]
+  );
+
+  const topQrCodes = useMemo(() => 
+    [...qrCodes]
+      .sort((a, b) => b.scanCount - a.scanCount)
+      .slice(0, 5),
+    [qrCodes]
+  );
+
+  const recentOrders = useMemo(() => 
+    [...orders]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5),
+    [orders]
+  );
+
+  // Filters
+  const filteredUsers = useMemo(() => {
+    return users.filter(user => {
+      const matchesSearch = 
+        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.company || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesFilter = 
+        statusFilter === "all" ||
+        (statusFilter === "admin" && user.isAdmin) ||
+        (statusFilter === "paid" && user.membershipTier !== "FREE") ||
+        (statusFilter === "free" && user.membershipTier === "FREE");
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [users, searchTerm, statusFilter]);
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter(order => {
+      const matchesSearch = 
+        order.userEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.qrCodeName.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesFilter = 
+        statusFilter === "all" ||
+        order.status === statusFilter;
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [orders, searchTerm, statusFilter]);
+
   const deleteUserMutation = useMutation({
     mutationFn: async (userId: string) => {
-      return await apiRequest(`/api/admin/users/${userId}`, 'DELETE');
+      await apiRequest(`/api/admin/users/${userId}`, 'DELETE');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
@@ -127,13 +214,13 @@ export default function AdminDashboard() {
 
   const updateOrderMutation = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
-      return await apiRequest(`/api/admin/orders/${orderId}`, 'PATCH', { status });
+      await apiRequest(`/api/admin/orders/${orderId}`, 'PATCH', { status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
       toast({
         title: "Order updated",
-        description: "Order status has been updated.",
+        description: "Order status has been updated successfully.",
       });
       setOrderToUpdate(null);
     },
@@ -159,267 +246,571 @@ export default function AdminDashboard() {
 
   if (statsLoading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center h-96">
-          <div className="text-muted-foreground">Loading admin dashboard...</div>
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="container mx-auto p-6">
+          <div className="flex items-center justify-center h-96">
+            <div className="text-muted-foreground">Loading admin dashboard...</div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold" data-testid="text-admin-title">Admin Dashboard</h1>
-          <p className="text-muted-foreground">Platform management and analytics</p>
+    <div className="min-h-screen bg-background">
+      <Navigation />
+      
+      <div className="container mx-auto p-6 space-y-8">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight" data-testid="text-admin-title">
+              Admin Dashboard
+            </h1>
+            <p className="text-muted-foreground mt-2">
+              Comprehensive platform management and analytics
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Export Data
+            </Button>
+          </div>
         </div>
+
+        {/* Key Metrics */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="border-l-4 border-l-primary">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+              <Users className="h-5 w-5 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold" data-testid="text-total-users">
+                {stats?.totalUsers || 0}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                <span className="text-primary font-medium">{activeUsers}</span> with paid plans
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-blue-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">QR Codes</CardTitle>
+              <QrCode className="h-5 w-5 text-blue-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold" data-testid="text-total-qrcodes">
+                {stats?.totalQrCodes || 0}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                <span className="text-blue-500 font-medium">{activeQrCodes}</span> currently active
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-purple-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Scans</CardTitle>
+              <Eye className="h-5 w-5 text-purple-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold" data-testid="text-total-scans">
+                {stats?.totalScans?.toLocaleString() || 0}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Across all QR codes
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-green-500">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Revenue</CardTitle>
+              <DollarSign className="h-5 w-5 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold" data-testid="text-monthly-revenue">
+                ${stats?.revenueThisMonth?.toFixed(2) || '0.00'}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                This month's revenue
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Secondary Metrics */}
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Orders</CardTitle>
+              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats?.totalOrders || 0}</div>
+              <div className="flex items-center gap-2 mt-2">
+                <Badge variant="outline" className="text-xs">
+                  {pendingOrders} pending
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Avg Scans per QR</CardTitle>
+              <Activity className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {stats?.totalQrCodes && stats?.totalScans 
+                  ? Math.round(stats.totalScans / stats.totalQrCodes)
+                  : 0
+                }
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Per QR code
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {stats?.totalUsers && activeUsers
+                  ? `${Math.round((activeUsers / stats.totalUsers) * 100)}%`
+                  : '0%'
+                }
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Free to paid conversion
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Quick Insights */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                Top Performing QR Codes
+              </CardTitle>
+              <CardDescription>QR codes with the most scans</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {topQrCodes.length > 0 ? (
+                <div className="space-y-3">
+                  {topQrCodes.map((qr, index) => (
+                    <div key={qr.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">
+                          #{index + 1}
+                        </div>
+                        <div>
+                          <p className="font-medium">{qr.name}</p>
+                          <p className="text-xs text-muted-foreground">{qr.userEmail}</p>
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className="font-mono">
+                        {qr.scanCount.toLocaleString()} scans
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-8">No QR codes yet</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Package className="h-5 w-5 text-blue-500" />
+                Recent Orders
+              </CardTitle>
+              <CardDescription>Latest order activity</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {recentOrders.length > 0 ? (
+                <div className="space-y-3">
+                  {recentOrders.map((order) => (
+                    <div key={order.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                      <div>
+                        <p className="font-medium text-sm">{order.userEmail}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {order.quantity}x {order.productType === 'sticker' ? 'Sticker' : 'Yard Sign'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <Badge className={getStatusColor(order.status)} variant="default">
+                          {order.status}
+                        </Badge>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          ${order.total}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-8">No orders yet</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Data Tables */}
+        <Tabs defaultValue="users" className="space-y-6">
+          <TabsList className="grid w-full md:w-auto md:inline-grid grid-cols-3 h-auto">
+            <TabsTrigger value="users" className="gap-2" data-testid="tab-users">
+              <UserCheck className="h-4 w-4" />
+              Users
+            </TabsTrigger>
+            <TabsTrigger value="qrcodes" className="gap-2" data-testid="tab-qrcodes">
+              <QrCode className="h-4 w-4" />
+              QR Codes
+            </TabsTrigger>
+            <TabsTrigger value="orders" className="gap-2" data-testid="tab-orders">
+              <ShoppingCart className="h-4 w-4" />
+              Orders
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="users" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>User Management</CardTitle>
+                    <CardDescription>Manage all platform users and their memberships</CardDescription>
+                  </div>
+                  <Badge variant="outline" className="ml-auto">
+                    {filteredUsers.length} users
+                  </Badge>
+                </div>
+                <div className="flex gap-4 mt-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search users..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Users</SelectItem>
+                      <SelectItem value="admin">Admins</SelectItem>
+                      <SelectItem value="paid">Paid Plans</SelectItem>
+                      <SelectItem value="free">Free Tier</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {usersLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading users...</div>
+                ) : filteredUsers.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">No users found</div>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>User</TableHead>
+                          <TableHead>Company</TableHead>
+                          <TableHead>Membership</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead>Joined</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredUsers.map((user) => (
+                          <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium" data-testid={`text-email-${user.id}`}>
+                                  {user.email}
+                                </p>
+                                <p className="text-sm text-muted-foreground" data-testid={`text-name-${user.id}`}>
+                                  {user.firstName} {user.lastName}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell data-testid={`text-company-${user.id}`}>
+                              {user.company || <span className="text-muted-foreground">-</span>}
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={user.membershipTier === 'PRO' ? 'default' : user.membershipTier === 'STANDARD' ? 'secondary' : 'outline'}
+                                data-testid={`badge-tier-${user.id}`}
+                              >
+                                {user.membershipTier || 'FREE'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {user.isAdmin && (
+                                <Badge variant="default" className="bg-primary" data-testid={`badge-admin-${user.id}`}>
+                                  Admin
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell data-testid={`text-joined-${user.id}`}>
+                              {format(new Date(user.createdAt), 'MMM dd, yyyy')}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem 
+                                    onClick={() => setDeleteUserId(user.id)}
+                                    disabled={user.isAdmin}
+                                    className="text-destructive"
+                                    data-testid={`button-delete-user-${user.id}`}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete User
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="qrcodes" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>QR Code Management</CardTitle>
+                    <CardDescription>View and manage all QR codes across the platform</CardDescription>
+                  </div>
+                  <Badge variant="outline" className="ml-auto">
+                    {qrCodes.length} total
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {qrCodesLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading QR codes...</div>
+                ) : qrCodes.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">No QR codes found</div>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>QR Code</TableHead>
+                          <TableHead>Short Code</TableHead>
+                          <TableHead>Owner</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Scans</TableHead>
+                          <TableHead>Created</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {qrCodes.map((qr) => (
+                          <TableRow key={qr.id} data-testid={`row-qrcode-${qr.id}`}>
+                            <TableCell>
+                              <p className="font-medium" data-testid={`text-qrname-${qr.id}`}>
+                                {qr.name}
+                              </p>
+                            </TableCell>
+                            <TableCell data-testid={`text-shortcode-${qr.id}`}>
+                              <code className="px-2 py-1 bg-muted rounded text-xs font-mono">
+                                {qr.shortCode}
+                              </code>
+                            </TableCell>
+                            <TableCell>
+                              <p className="text-sm" data-testid={`text-owner-${qr.id}`}>
+                                {qr.userEmail}
+                              </p>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={qr.isActive ? "default" : "secondary"}
+                                data-testid={`badge-status-${qr.id}`}
+                                className={qr.isActive ? "bg-green-500" : ""}
+                              >
+                                {qr.isActive ? 'Active' : 'Inactive'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Eye className="h-4 w-4 text-muted-foreground" />
+                                <span className="font-medium" data-testid={`text-scans-${qr.id}`}>
+                                  {qr.scanCount.toLocaleString()}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell data-testid={`text-created-${qr.id}`}>
+                              {format(new Date(qr.createdAt), 'MMM dd, yyyy')}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="orders" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Order Management</CardTitle>
+                    <CardDescription>Manage and track all platform orders</CardDescription>
+                  </div>
+                  <Badge variant="outline" className="ml-auto">
+                    {filteredOrders.length} orders
+                  </Badge>
+                </div>
+                <div className="flex gap-4 mt-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search orders..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="processing">Processing</SelectItem>
+                      <SelectItem value="shipped">Shipped</SelectItem>
+                      <SelectItem value="delivered">Delivered</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {ordersLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading orders...</div>
+                ) : filteredOrders.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">No orders found</div>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Order Details</TableHead>
+                          <TableHead>Product</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredOrders.map((order) => (
+                          <TableRow key={order.id} data-testid={`row-order-${order.id}`}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium" data-testid={`text-customer-${order.id}`}>
+                                  {order.userEmail}
+                                </p>
+                                <p className="text-sm text-muted-foreground" data-testid={`text-qrcode-${order.id}`}>
+                                  QR: {order.qrCodeName}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell data-testid={`text-product-${order.id}`}>
+                              <div className="flex items-center gap-2">
+                                <Package className="h-4 w-4 text-muted-foreground" />
+                                <span>
+                                  {order.quantity}x {order.productType === 'sticker' ? 'Sticker' : 'Yard Sign'}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <span className="font-semibold" data-testid={`text-total-${order.id}`}>
+                                ${order.total}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                className={getStatusColor(order.status)} 
+                                variant="default"
+                                data-testid={`badge-order-status-${order.id}`}
+                              >
+                                {order.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell data-testid={`text-date-${order.id}`}>
+                              {format(new Date(order.createdAt), 'MMM dd, yyyy')}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setOrderToUpdate({ id: order.id, status: order.status })}
+                                data-testid={`button-update-order-${order.id}`}
+                              >
+                                Update
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card data-testid="card-stat-users">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-users">{stats?.totalUsers || 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-stat-qrcodes">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total QR Codes</CardTitle>
-            <QrCode className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-qrcodes">{stats?.totalQrCodes || 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-stat-scans">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Scans</CardTitle>
-            <QrCode className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-scans">{stats?.totalScans || 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-stat-orders">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-orders">{stats?.totalOrders || 0}</div>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-stat-revenue">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Revenue (Month)</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-monthly-revenue">
-              ${stats?.revenueThisMonth?.toFixed(2) || '0.00'}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="users" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
-          <TabsTrigger value="qrcodes" data-testid="tab-qrcodes">QR Codes</TabsTrigger>
-          <TabsTrigger value="orders" data-testid="tab-orders">Orders</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="users" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>User Management</CardTitle>
-              <CardDescription>Manage all platform users and their memberships</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {usersLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading users...</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Company</TableHead>
-                      <TableHead>Membership</TableHead>
-                      <TableHead>Admin</TableHead>
-                      <TableHead>Joined</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {users.map((user) => (
-                      <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
-                        <TableCell className="font-medium" data-testid={`text-email-${user.id}`}>{user.email}</TableCell>
-                        <TableCell data-testid={`text-name-${user.id}`}>
-                          {user.firstName} {user.lastName}
-                        </TableCell>
-                        <TableCell data-testid={`text-company-${user.id}`}>{user.company || '-'}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" data-testid={`badge-tier-${user.id}`}>
-                            {user.membershipTier || 'FREE'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {user.isAdmin && (
-                            <Badge variant="default" data-testid={`badge-admin-${user.id}`}>Admin</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell data-testid={`text-joined-${user.id}`}>
-                          {format(new Date(user.createdAt), 'MMM dd, yyyy')}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteUserId(user.id)}
-                            disabled={user.isAdmin}
-                            data-testid={`button-delete-user-${user.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="qrcodes" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>QR Code Management</CardTitle>
-              <CardDescription>View all QR codes across the platform</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {qrCodesLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading QR codes...</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Short Code</TableHead>
-                      <TableHead>Owner</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Scans</TableHead>
-                      <TableHead>Created</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {qrCodes.map((qr) => (
-                      <TableRow key={qr.id} data-testid={`row-qrcode-${qr.id}`}>
-                        <TableCell className="font-medium" data-testid={`text-qrname-${qr.id}`}>{qr.name}</TableCell>
-                        <TableCell data-testid={`text-shortcode-${qr.id}`}>
-                          <code className="px-2 py-1 bg-muted rounded">{qr.shortCode}</code>
-                        </TableCell>
-                        <TableCell data-testid={`text-owner-${qr.id}`}>{qr.userEmail}</TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={qr.isActive ? "default" : "secondary"}
-                            data-testid={`badge-status-${qr.id}`}
-                          >
-                            {qr.isActive ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell data-testid={`text-scans-${qr.id}`}>{qr.scanCount}</TableCell>
-                        <TableCell data-testid={`text-created-${qr.id}`}>
-                          {format(new Date(qr.createdAt), 'MMM dd, yyyy')}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="orders" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Order Management</CardTitle>
-              <CardDescription>Manage and track all platform orders</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {ordersLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading orders...</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Customer</TableHead>
-                      <TableHead>QR Code</TableHead>
-                      <TableHead>Product</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orders.map((order) => (
-                      <TableRow key={order.id} data-testid={`row-order-${order.id}`}>
-                        <TableCell className="font-medium" data-testid={`text-customer-${order.id}`}>
-                          {order.userEmail}
-                        </TableCell>
-                        <TableCell data-testid={`text-qrcode-${order.id}`}>{order.qrCodeName}</TableCell>
-                        <TableCell data-testid={`text-product-${order.id}`}>
-                          {order.productType === 'sticker' ? 'Sticker' : 'Yard Sign'}
-                        </TableCell>
-                        <TableCell data-testid={`text-quantity-${order.id}`}>{order.quantity}</TableCell>
-                        <TableCell data-testid={`text-total-${order.id}`}>${order.total}</TableCell>
-                        <TableCell>
-                          <Badge className={getStatusColor(order.status)} data-testid={`badge-order-status-${order.id}`}>
-                            {order.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell data-testid={`text-date-${order.id}`}>
-                          {format(new Date(order.createdAt), 'MMM dd, yyyy')}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setOrderToUpdate({ id: order.id, status: order.status })}
-                            data-testid={`button-update-order-${order.id}`}
-                          >
-                            Update Status
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
+      {/* Delete User Dialog */}
       <AlertDialog open={!!deleteUserId} onOpenChange={() => setDeleteUserId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <div className="flex items-center gap-2">
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+              </div>
+              <AlertDialogTitle>Delete User</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="pt-2">
               This will permanently delete the user and all their associated data including QR codes and orders.
-              This action cannot be undone.
+              <strong className="block mt-2">This action cannot be undone.</strong>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -435,6 +826,7 @@ export default function AdminDashboard() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Update Order Dialog */}
       <AlertDialog open={!!orderToUpdate} onOpenChange={() => setOrderToUpdate(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
