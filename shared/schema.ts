@@ -73,6 +73,13 @@ export const qrCodeScans = pgTable("qr_code_scans", {
   scannedAt: timestamp("scanned_at").defaultNow().notNull(),
 });
 
+export const qrCodeUrlHistory = pgTable("qr_code_url_history", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  qrCodeId: uuid("qr_code_id").references(() => qrCodes.id, { onDelete: "cascade" }).notNull(),
+  destinationUrl: text("destination_url").notNull(),
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
+});
+
 export const orders = pgTable("orders", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
@@ -111,6 +118,14 @@ export const qrCodesRelations = relations(qrCodes, ({ one, many }) => ({
   }),
   scans: many(qrCodeScans),
   orders: many(orders),
+  urlHistory: many(qrCodeUrlHistory),
+}));
+
+export const qrCodeUrlHistoryRelations = relations(qrCodeUrlHistory, ({ one }) => ({
+  qrCode: one(qrCodes, {
+    fields: [qrCodeUrlHistory.qrCodeId],
+    references: [qrCodes.id],
+  }),
 }));
 
 export const qrCodeScansRelations = relations(qrCodeScans, ({ one }) => ({
@@ -176,6 +191,7 @@ export type User = typeof users.$inferSelect;
 export type InsertQrCode = z.infer<typeof insertQrCodeSchema>;
 export type QrCode = typeof qrCodes.$inferSelect;
 export type QrCodeScan = typeof qrCodeScans.$inferSelect;
+export type QrCodeUrlHistory = typeof qrCodeUrlHistory.$inferSelect;
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
 export type MembershipTier = typeof membershipTiers.$inferSelect;
