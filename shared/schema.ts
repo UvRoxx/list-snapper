@@ -104,10 +104,22 @@ export const orderStatusHistory = pgTable("order_status_history", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const cartItems = pgTable("cart_items", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  qrCodeId: uuid("qr_code_id").references(() => qrCodes.id, { onDelete: "cascade" }).notNull(),
+  productType: productTypeEnum("product_type").notNull(),
+  quantity: integer("quantity").notNull(),
+  size: text("size"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many, one }) => ({
   qrCodes: many(qrCodes),
   orders: many(orders),
+  cartItems: many(cartItems),
   membership: one(userMemberships),
 }));
 
@@ -118,6 +130,7 @@ export const qrCodesRelations = relations(qrCodes, ({ one, many }) => ({
   }),
   scans: many(qrCodeScans),
   orders: many(orders),
+  cartItems: many(cartItems),
   urlHistory: many(qrCodeUrlHistory),
 }));
 
@@ -154,6 +167,17 @@ export const userMembershipsRelations = relations(userMemberships, ({ one }) => 
   }),
 }));
 
+export const cartItemsRelations = relations(cartItems, ({ one }) => ({
+  user: one(users, {
+    fields: [cartItems.userId],
+    references: [users.id],
+  }),
+  qrCode: one(qrCodes, {
+    fields: [cartItems.qrCodeId],
+    references: [qrCodes.id],
+  }),
+}));
+
 // Zod schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   email: true,
@@ -181,6 +205,13 @@ export const insertOrderSchema = createInsertSchema(orders).pick({
   shippingAddress: true,
 });
 
+export const insertCartItemSchema = createInsertSchema(cartItems).pick({
+  qrCodeId: true,
+  productType: true,
+  quantity: true,
+  size: true,
+});
+
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
@@ -196,3 +227,5 @@ export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
 export type MembershipTier = typeof membershipTiers.$inferSelect;
 export type UserMembership = typeof userMemberships.$inferSelect;
+export type InsertCartItem = z.infer<typeof insertCartItemSchema>;
+export type CartItem = typeof cartItems.$inferSelect;

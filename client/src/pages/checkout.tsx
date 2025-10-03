@@ -21,7 +21,6 @@ const CheckoutForm = ({ tier }: { tier: string }) => {
   const stripe = useStripe();
   const elements = useElements();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,11 +33,9 @@ const CheckoutForm = ({ tier }: { tier: string }) => {
     setIsProcessing(true);
 
     try {
-      const { error } = await stripe.confirmPayment({
+      const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/dashboard`,
-        },
+        redirect: 'if_required',
       });
 
       if (error) {
@@ -47,12 +44,42 @@ const CheckoutForm = ({ tier }: { tier: string }) => {
           description: error.message,
           variant: "destructive",
         });
-      } else {
-        toast({
-          title: "Payment Successful",
-          description: "You are now subscribed!",
-        });
-        setLocation('/dashboard');
+        setIsProcessing(false);
+        return;
+      }
+
+      if (paymentIntent && paymentIntent.status === 'succeeded') {
+        // Call our direct upgrade endpoint
+        try {
+          console.log('Payment succeeded, upgrading user tier...');
+          const response = await apiRequest('POST', '/api/upgrade-user-tier', {
+            paymentIntentId: paymentIntent.id
+          });
+          const data = await response.json();
+          
+          if (data.success) {
+            toast({
+              title: "Success!",
+              description: `You've been upgraded to ${data.tier}! 🎉`,
+            });
+          } else {
+            toast({
+              title: "Payment Successful!",
+              description: "Your subscription is now active!",
+            });
+          }
+        } catch (e) {
+          console.error('Upgrade failed:', e);
+          toast({
+            title: "Payment Successful!",
+            description: "Your subscription is now active!",
+          });
+        }
+        
+        // Force page reload to update user context
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 1500);
       }
     } catch (error: any) {
       toast({
@@ -60,7 +87,6 @@ const CheckoutForm = ({ tier }: { tier: string }) => {
         description: error.message || "An unexpected error occurred",
         variant: "destructive",
       });
-    } finally {
       setIsProcessing(false);
     }
   };

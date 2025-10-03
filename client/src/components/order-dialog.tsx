@@ -16,10 +16,11 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Package, CreditCard, CheckCircle2, Sticker, SignpostBig, Check } from "lucide-react";
+import { Loader2, Package, CreditCard, CheckCircle2, Sticker, SignpostBig, Check, ShoppingCart } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { useAuth } from "@/hooks/use-auth";
+import { useCart } from "@/hooks/use-cart";
 import type { QrCode } from "@shared/schema";
 import QRCodeLib from "qrcode";
 
@@ -29,6 +30,7 @@ interface OrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   qrCodeId: string | null;
+  initialProductType?: string | null;
 }
 
 interface CheckoutFormProps {
@@ -173,9 +175,10 @@ function CheckoutForm({ qrCode, productType, size, quantity, total, shippingAddr
   );
 }
 
-export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) {
+export function OrderDialog({ open, onOpenChange, qrCodeId, initialProductType }: OrderDialogProps) {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { addToCart } = useCart();
   const [step, setStep] = useState(0);
   const [selectedQrCodeId, setSelectedQrCodeId] = useState<string | null>(qrCodeId);
   const [productType, setProductType] = useState<string | null>(null);
@@ -208,13 +211,27 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
   useEffect(() => {
     if (qrCodeId) {
       setSelectedQrCodeId(qrCodeId);
-      setStep(1);
+      if (initialProductType) {
+        // When coming from QR detail page with both qrCodeId and type, skip to configuration
+        setProductType(initialProductType);
+        setStep(2);
+      } else {
+        // When coming from QR detail page, skip QR selection, go to product selection
+        setStep(1);
+      }
     } else {
       setSelectedQrCodeId(null);
-      setStep(0);
-      setProductType(null);
+      if (initialProductType) {
+        // When coming from orders page with product type selected, skip to QR selection
+        setProductType(initialProductType);
+        setStep(0);
+      } else {
+        // Default: start from QR selection
+        setStep(0);
+        setProductType(null);
+      }
     }
-  }, [qrCodeId, open]);
+  }, [qrCodeId, initialProductType, open]);
 
   useEffect(() => {
     if (user?.savedAddress) {
@@ -255,17 +272,10 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
 
   const fetchPrice = async () => {
     try {
-      const response = await fetch('/api/orders/calculate-price', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth-token')}`,
-        },
-        body: JSON.stringify({
-          productType,
-          size,
-          quantity,
-        }),
+      const response = await apiRequest('POST', '/api/orders/calculate-price', {
+        productType,
+        size,
+        quantity,
       });
       const data = await response.json();
       setTotal(parseFloat(data.total));
@@ -277,8 +287,8 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
   const handleSaveAddress = async () => {
     if (saveAddress) {
       try {
-        await apiRequest('/api/users/save-address', 'POST', {
-          address: JSON.stringify(shippingAddress),
+        await apiRequest('PUT', '/api/auth/profile', {
+          savedAddress: JSON.stringify(shippingAddress),
         });
         queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       } catch (error) {
@@ -312,15 +322,8 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
     await handleSaveAddress();
 
     try {
-      const response = await fetch('/api/create-payment-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth-token')}`,
-        },
-        body: JSON.stringify({
-          amount: total.toFixed(2),
-        }),
+      const response = await apiRequest('POST', '/api/create-payment-intent', {
+        amount: total.toFixed(2),
       });
       const data = await response.json();
       setClientSecret(data.clientSecret);
@@ -331,6 +334,31 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
         description: error.message || "Failed to initialize payment",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleAddToCart = async () => {
+    if (!selectedQrCodeId || !productType) return;
+    
+    try {
+      await addToCart({
+        qrCodeId: selectedQrCodeId,
+        productType,
+        quantity,
+        size: productType === 'sticker' ? size : undefined,
+      });
+      
+      // Reset and close dialog
+      onOpenChange(false);
+      setTimeout(() => {
+        setStep(qrCodeId ? 1 : 0);
+        setSelectedQrCodeId(qrCodeId);
+        setProductType(null);
+        setSize("medium");
+        setQuantity(10);
+      }, 300);
+    } catch (error: any) {
+      // Error already handled by useCart hook
     }
   };
 
@@ -362,12 +390,21 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
         <DialogHeader>
           <DialogTitle className="flex items-center">
             <Package className="h-5 w-5 mr-2" />
-            {orderComplete ? "Order Complete" : `Order Physical Products`}
+            {orderComplete ? "Order Complete" : 
+             step === 0 ? "Select QR Code" :
+             step === 1 ? "Choose Product Type" :
+             step === 2 ? `Configure Your ${getProductName()}` :
+             step === 3 ? "Shipping Information" :
+             "Complete Payment"}
           </DialogTitle>
           <DialogDescription>
             {orderComplete
               ? "Thank you for your order!"
-              : qrCode ? `Create an order for ${qrCode.name}` : `Select a product to order`}
+              : step === 0 ? "Choose which QR code to print on your physical products"
+              : step === 1 ? "Select stickers or yard signs for your QR code"
+              : step === 2 ? "Choose size and quantity for your order"
+              : step === 3 ? "Enter your shipping address"
+              : `Complete your order for ${qrCode?.name || 'your QR code'}`}
           </DialogDescription>
         </DialogHeader>
 
@@ -386,27 +423,39 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
           <div className="space-y-6">
             {/* Progress Steps */}
             {step > 0 && (
-              <div className="flex items-center justify-center space-x-2">
-                {[1, 2, 3, 4].map((num) => (
-                  <div key={num} className="flex items-center">
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-                        step >= num
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {num}
+              <div className="flex items-center justify-center">
+                <div className="flex items-center space-x-2">
+                  {[
+                    { num: 1, label: "Product" },
+                    { num: 2, label: "Details" },
+                    { num: 3, label: "Shipping" },
+                    { num: 4, label: "Payment" }
+                  ].map(({ num, label }) => (
+                    <div key={num} className="flex items-center">
+                      <div className="flex flex-col items-center">
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
+                            step >= num
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {step > num ? <Check className="h-4 w-4" /> : num}
+                        </div>
+                        <span className={`text-xs mt-1 ${step >= num ? "text-primary font-medium" : "text-muted-foreground"}`}>
+                          {label}
+                        </span>
+                      </div>
+                      {num < 4 && (
+                        <div
+                          className={`w-12 h-0.5 mx-2 ${
+                            step > num ? "bg-primary" : "bg-muted"
+                          }`}
+                        />
+                      )}
                     </div>
-                    {num < 4 && (
-                      <div
-                        className={`w-12 h-0.5 ${
-                          step > num ? "bg-primary" : "bg-muted"
-                        }`}
-                      />
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
 
@@ -460,7 +509,7 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
                 )}
 
                 <Button
-                  onClick={() => setStep(1)}
+                  onClick={() => setStep(productType ? 2 : 1)}
                   className="w-full"
                   disabled={!selectedQrCodeId}
                   data-testid="button-next-qr"
@@ -621,21 +670,32 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setStep(1)}
+                      className="flex-1"
+                      data-testid="button-back"
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      onClick={() => setStep(3)}
+                      className="flex-1"
+                      data-testid="button-next-shipping"
+                    >
+                      Continue to Shipping
+                    </Button>
+                  </div>
                   <Button
-                    variant="outline"
-                    onClick={() => setStep(1)}
-                    className="flex-1"
-                    data-testid="button-back"
+                    variant="secondary"
+                    onClick={handleAddToCart}
+                    className="w-full"
+                    data-testid="button-add-to-cart"
                   >
-                    Back
-                  </Button>
-                  <Button
-                    onClick={() => setStep(3)}
-                    className="flex-1"
-                    data-testid="button-next-shipping"
-                  >
-                    Continue to Shipping
+                    <ShoppingCart className="h-4 w-4 mr-2" />
+                    Add to Cart
                   </Button>
                 </div>
               </div>

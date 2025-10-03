@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/hooks/use-auth";
-import { QrCode, Moon, Sun, Globe } from "lucide-react";
+import { useCart } from "@/hooks/use-cart";
+import { QrCode, Moon, Sun, ShoppingCart } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,7 +24,8 @@ import { useState, useEffect } from "react";
 export function Navigation() {
   const { theme, setTheme } = useTheme();
   const { user, logout } = useAuth();
-  const { i18n: i18nInstance } = useTranslation();
+  const { cartCount } = useCart();
+  const { t, i18n: i18nInstance } = useTranslation('common');
   const [language, setLanguage] = useState(() => 
     localStorage.getItem('language') || 'en'
   );
@@ -37,6 +39,9 @@ export function Navigation() {
 
   const handleLanguageChange = (value: string) => {
     setLanguage(value);
+    if (i18nInstance) {
+      i18nInstance.changeLanguage(value);
+    }
   };
 
   return (
@@ -63,7 +68,7 @@ export function Navigation() {
                     href="/pricing" 
                     className="text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    Pricing
+                    {t('pricing')}
                   </Link>
                 </>
               )}
@@ -73,7 +78,7 @@ export function Navigation() {
                     href="/dashboard" 
                     className="text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    Dashboard
+                    {t('dashboard')}
                   </Link>
                   {user.isAdmin && (
                     <Link 
@@ -91,14 +96,33 @@ export function Navigation() {
           
           <div className="flex items-center space-x-4">
             <Select value={language} onValueChange={handleLanguageChange}>
-              <SelectTrigger className="w-16" data-testid="select-language">
-                <Globe className="h-4 w-4" />
+              <SelectTrigger className="w-[70px]" data-testid="select-language">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="en">EN</SelectItem>
                 <SelectItem value="fr">FR</SelectItem>
               </SelectContent>
             </Select>
+            
+            {user && (
+              <Link href="/cart">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative"
+                  data-testid="button-cart"
+                >
+                  <ShoppingCart className="h-5 w-5" />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center font-semibold">
+                      {cartCount}
+                    </span>
+                  )}
+                  <span className="sr-only">Shopping cart</span>
+                </Button>
+              </Link>
+            )}
             
             <Button
               variant="ghost"

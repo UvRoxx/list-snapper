@@ -19,6 +19,7 @@ export default function Orders() {
   const { user } = useAuth();
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [selectedQrCodeId, setSelectedQrCodeId] = useState<string | null>(null);
+  const [selectedProductType, setSelectedProductType] = useState<string | null>(null);
   
   const { data: orders = [] } = useQuery<any[]>({
     queryKey: ['/api/orders'],
@@ -28,15 +29,18 @@ export default function Orders() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const qrId = params.get('qrId');
+    const type = params.get('type');
     
     if (qrId) {
       setSelectedQrCodeId(qrId);
+      setSelectedProductType(type);
       setOrderDialogOpen(true);
     }
   }, []);
 
-  const handleOpenOrderDialog = () => {
+  const handleOpenOrderDialog = (productType: string) => {
     setSelectedQrCodeId(null);
+    setSelectedProductType(productType);
     setOrderDialogOpen(true);
   };
 
@@ -116,7 +120,7 @@ export default function Orders() {
                 </div>
 
                 <Button 
-                  onClick={handleOpenOrderDialog}
+                  onClick={() => handleOpenOrderDialog('sticker')}
                   className="w-full"
                   data-testid="button-order-stickers"
                 >
@@ -160,7 +164,7 @@ export default function Orders() {
                 </div>
 
                 <Button 
-                  onClick={handleOpenOrderDialog}
+                  onClick={() => handleOpenOrderDialog('yard_sign')}
                   className="w-full"
                   data-testid="button-order-yard-signs"
                 >
@@ -231,9 +235,11 @@ export default function Orders() {
                           </td>
                           <td className="px-6 py-4 font-semibold">${order.total}</td>
                           <td className="px-6 py-4">
-                            <Button variant="ghost" size="sm">
-                              View Details
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button variant="ghost" size="sm" data-testid={`button-view-order-${order.id}`}>
+                                Track Order
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -251,10 +257,14 @@ export default function Orders() {
         onOpenChange={(open) => {
           setOrderDialogOpen(open);
           if (!open) {
+            // Clean up URL params and reset state when dialog closes
             window.history.replaceState({}, '', '/orders');
+            setSelectedProductType(null);
+            setSelectedQrCodeId(null);
           }
         }}
         qrCodeId={selectedQrCodeId}
+        initialProductType={selectedProductType}
       />
     </ProtectedRoute>
   );

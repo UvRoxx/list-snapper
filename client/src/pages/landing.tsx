@@ -1,20 +1,24 @@
 import { Link } from "wouter";
 import { Navigation } from "@/components/navigation";
+import { DashboardPreview } from "@/components/dashboard-preview";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import { 
   ChartLine, 
   Palette, 
   RotateCcw, 
   Printer, 
-  Code, 
   Shield,
   Sparkles,
-  Check
+  Check,
+  Zap
 } from "lucide-react";
 
 export default function Landing() {
+  const { t } = useTranslation('common');
+  
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -36,7 +40,7 @@ export default function Landing() {
               transition={{ duration: 0.4, delay: 0.1 }}
             >
               <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">Smart QR Code Management Platform</span>
+              <span className="text-sm font-medium">{t('smart_qr_platform')}</span>
             </motion.div>
             <motion.h1 
               className="text-5xl md:text-6xl font-bold mb-6 leading-tight" 
@@ -45,8 +49,7 @@ export default function Landing() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
             >
-              Create, Track & Manage
-              <span className="text-primary"> QR Codes</span> Like Never Before
+              {t('create_track_manage')}
             </motion.h1>
             <motion.p 
               className="text-xl text-muted-foreground mb-8" 
@@ -55,7 +58,7 @@ export default function Landing() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
             >
-              Dynamic QR codes with powerful analytics, custom branding, and seamless ordering for physical products. All in one beautiful platform.
+              {t('dynamic_qr_description')}
             </motion.p>
             <motion.div 
               className="flex flex-col sm:flex-row gap-4 justify-center"
@@ -65,12 +68,12 @@ export default function Landing() {
             >
               <Link href="/register">
                 <Button size="lg" className="px-8 py-4 font-semibold hover:scale-105 transition-transform" data-testid="button-start-trial">
-                  Start Free Trial
+                  {t('start_free_trial')}
                 </Button>
               </Link>
               <Link href="/pricing">
                 <Button variant="outline" size="lg" className="px-8 py-4 font-semibold hover:scale-105 transition-transform" data-testid="button-view-pricing">
-                  View Pricing
+                  {t('view_pricing')}
                 </Button>
               </Link>
             </motion.div>
@@ -82,30 +85,23 @@ export default function Landing() {
             >
               <div className="flex items-center space-x-2">
                 <Check className="h-4 w-4 text-primary" />
-                <span>No credit card required</span>
+                <span>{t('no_credit_card')}</span>
               </div>
               <div className="flex items-center space-x-2">
                 <Check className="h-4 w-4 text-primary" />
-                <span>Free forever plan</span>
+                <span>{t('free_forever')}</span>
               </div>
             </motion.div>
           </motion.div>
 
-          {/* Hero Image Mockup */}
+          {/* Hero Dashboard Preview */}
           <motion.div 
-            className="mt-16 max-w-5xl mx-auto"
+            className="mt-16"
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.6 }}
           >
-            <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-border hover:shadow-3xl transition-shadow duration-300">
-              <img 
-                src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&h=1080" 
-                alt="Dashboard preview showing analytics and QR code management" 
-                className="w-full"
-                data-testid="img-dashboard-preview"
-              />
-            </div>
+            <DashboardPreview />
           </motion.div>
         </div>
       </section>
@@ -121,22 +117,22 @@ export default function Landing() {
             transition={{ duration: 0.6 }}
           >
             <h2 className="text-4xl font-bold mb-4" data-testid="text-features-title">
-              Everything You Need to Succeed
+              {t('everything_you_need')}
             </h2>
-            <p className="text-xl text-muted-foreground">Powerful features designed for modern businesses</p>
+            <p className="text-xl text-muted-foreground">{t('powerful_features')}</p>
           </motion.div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
-              { icon: ChartLine, title: "Advanced Analytics", description: "Track scans in real-time with detailed insights on location, devices, and user behavior.", testId: "card-feature-analytics" },
-              { icon: Palette, title: "Custom Branding", description: "Customize QR codes with your brand colors, logo, and design preferences.", testId: "card-feature-branding" },
-              { icon: RotateCcw, title: "Dynamic URLs", description: "Update destination URLs anytime without changing your QR code.", testId: "card-feature-dynamic" },
-              { icon: Printer, title: "Physical Products", description: "Order professional stickers and yard signs with your QR codes printed.", testId: "card-feature-products" },
-              { icon: Code, title: "API Access", description: "Integrate QR code generation into your apps with our powerful API.", testId: "card-feature-api" },
-              { icon: Shield, title: "Enterprise Security", description: "Bank-level encryption and security for all your QR code data.", testId: "card-feature-security" }
+              { icon: ChartLine, titleKey: "advanced_analytics", descKey: "advanced_analytics_desc", testId: "card-feature-analytics" },
+              { icon: Palette, titleKey: "custom_branding", descKey: "custom_branding_desc", testId: "card-feature-branding" },
+              { icon: RotateCcw, titleKey: "dynamic_urls", descKey: "dynamic_urls_desc", testId: "card-feature-dynamic" },
+              { icon: Printer, titleKey: "physical_products", descKey: "physical_products_desc", testId: "card-feature-products" },
+              { icon: Zap, titleKey: "instant_updates", descKey: "instant_updates_desc", testId: "card-feature-instant" },
+              { icon: Shield, titleKey: "enterprise_security", descKey: "enterprise_security_desc", testId: "card-feature-security" }
             ].map((feature, index) => (
               <motion.div
-                key={feature.title}
+                key={feature.titleKey}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
@@ -151,42 +147,10 @@ export default function Landing() {
                     >
                       <feature.icon className="h-6 w-6 text-primary" />
                     </motion.div>
-                    <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
-                    <p className="text-muted-foreground">{feature.description}</p>
+                    <h3 className="text-xl font-semibold mb-3">{t(feature.titleKey)}</h3>
+                    <p className="text-muted-foreground">{t(feature.descKey)}</p>
                   </CardContent>
                 </Card>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="py-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-8 text-center">
-            {[
-              { value: "10M+", label: "QR Codes Created", testId: "stat-qr-codes" },
-              { value: "500M+", label: "Total Scans", testId: "stat-scans" },
-              { value: "50K+", label: "Active Users", testId: "stat-users" },
-              { value: "150+", label: "Countries", testId: "stat-countries" }
-            ].map((stat, index) => (
-              <motion.div
-                key={stat.label}
-                data-testid={stat.testId}
-                initial={{ opacity: 0, scale: 0.8 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-              >
-                <motion.div 
-                  className="text-4xl font-bold text-primary mb-2"
-                  whileHover={{ scale: 1.1 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  {stat.value}
-                </motion.div>
-                <div className="text-muted-foreground">{stat.label}</div>
               </motion.div>
             ))}
           </div>
@@ -202,11 +166,11 @@ export default function Landing() {
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-4xl font-bold mb-4" data-testid="text-cta-title">Ready to Get Started?</h2>
-          <p className="text-xl text-muted-foreground mb-8">Join thousands of businesses using ListSnapper</p>
+          <h2 className="text-4xl font-bold mb-4" data-testid="text-cta-title">{t('ready_to_start')}</h2>
+          <p className="text-xl text-muted-foreground mb-8">{t('join_thousands')}</p>
           <Link href="/register">
             <Button size="lg" className="px-8 py-4 font-semibold hover:scale-105 transition-transform" data-testid="button-start-trial-cta">
-              Start Your Free Trial
+              {t('start_trial')}
             </Button>
           </Link>
         </motion.div>
@@ -223,37 +187,37 @@ export default function Landing() {
                 </div>
                 <span className="text-lg font-bold">ListSnapper</span>
               </div>
-              <p className="text-muted-foreground text-sm">Smart QR code management for modern businesses.</p>
+              <p className="text-muted-foreground text-sm">{t('smart_qr_tagline')}</p>
             </div>
             <div>
-              <h4 className="font-semibold mb-4">Product</h4>
+              <h4 className="font-semibold mb-4">{t('product')}</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="#" className="hover:text-foreground transition-colors">Features</Link></li>
-                <li><Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link></li>
-                <li><Link href="#" className="hover:text-foreground transition-colors">API</Link></li>
-                <li><Link href="#" className="hover:text-foreground transition-colors">Integrations</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">{t('features')}</Link></li>
+                <li><Link href="/pricing" className="hover:text-foreground transition-colors">{t('pricing')}</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">{t('api')}</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">{t('integrations')}</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold mb-4">Company</h4>
+              <h4 className="font-semibold mb-4">{t('company')}</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="#" className="hover:text-foreground transition-colors">About</Link></li>
-                <li><Link href="#" className="hover:text-foreground transition-colors">Blog</Link></li>
-                <li><Link href="#" className="hover:text-foreground transition-colors">Careers</Link></li>
-                <li><Link href="#" className="hover:text-foreground transition-colors">Contact</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">{t('about')}</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">{t('blog')}</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">{t('careers')}</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">{t('contact')}</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold mb-4">Legal</h4>
+              <h4 className="font-semibold mb-4">{t('legal')}</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link href="#" className="hover:text-foreground transition-colors">Privacy</Link></li>
-                <li><Link href="#" className="hover:text-foreground transition-colors">Terms</Link></li>
-                <li><Link href="#" className="hover:text-foreground transition-colors">Security</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">{t('privacy')}</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">{t('terms')}</Link></li>
+                <li><Link href="#" className="hover:text-foreground transition-colors">{t('security')}</Link></li>
               </ul>
             </div>
           </div>
           <div className="border-t border-border mt-8 pt-8 text-center text-sm text-muted-foreground">
-            <p>&copy; {new Date().getFullYear()} ListSnapper. All rights reserved.</p>
+            <p>{t('all_rights_reserved')}</p>
           </div>
         </div>
       </footer>

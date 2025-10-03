@@ -58,6 +58,7 @@ export interface IStorage {
   getOrder(id: string): Promise<Order | undefined>;
   createOrder(order: InsertOrder & { userId: string }): Promise<Order>;
   updateOrder(id: string, updates: Partial<Order>): Promise<Order>;
+  updateOrderStatus(id: string, status: string): Promise<Order>;
 
   // Admin methods
   getAllUsers(): Promise<(User & { membershipTier?: string })[]>;
@@ -404,6 +405,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(orders.id, id))
       .returning();
     return order;
+  }
+
+  async updateOrderStatus(id: string, status: string): Promise<Order> {
+    return await this.updateOrder(id, { status: status as any });
   }
 
   async getAllUsers(): Promise<(User & { membershipTier?: string })[]> {

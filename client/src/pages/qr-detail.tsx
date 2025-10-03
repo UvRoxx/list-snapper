@@ -302,7 +302,7 @@ export default function QrDetail() {
                             </div>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>Click to copy short code</p>
+                            <p>This code will be printed at the bottom right of your QR code. Click to copy.</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -339,7 +339,7 @@ export default function QrDetail() {
                             </div>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>Click icon to copy full URL</p>
+                            <p>This is the URL where users will be redirected when they scan your QR code. Click icon to copy.</p>
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>

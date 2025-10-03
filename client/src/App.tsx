@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/hooks/use-auth";
+import { CartProvider } from "@/hooks/use-cart";
 import "./lib/i18n";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
@@ -16,6 +17,8 @@ import CreateQR from "@/pages/create-qr";
 import QrDetail from "@/pages/qr-detail";
 import Analytics from "@/pages/analytics";
 import Orders from "@/pages/orders";
+import Cart from "@/pages/cart";
+import CheckoutCart from "@/pages/checkout-cart";
 import Settings from "@/pages/settings";
 import Checkout from "@/pages/checkout";
 import AdminDashboard from "@/pages/admin";
@@ -32,6 +35,8 @@ function Router() {
       <Route path="/qr/:id" component={QrDetail} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/orders" component={Orders} />
+      <Route path="/cart" component={Cart} />
+      <Route path="/checkout-cart" component={CheckoutCart} />
       <Route path="/settings" component={Settings} />
       <Route path="/checkout/:tier" component={Checkout} />
       <Route path="/admin" component={AdminDashboard} />
@@ -45,10 +50,12 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="listsnapper-theme">
         <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
+          <CartProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+            </TooltipProvider>
+          </CartProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,9 +10,16 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
+import { 
+  Tooltip, 
+  TooltipContent, 
+  TooltipProvider, 
+  TooltipTrigger 
+} from "@/components/ui/tooltip";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, Download, MoreVertical, Edit, Trash, BarChart3, Calendar, ExternalLink } from "lucide-react";
+import QRCode from "qrcode";
 
 interface QrCodeCardProps {
   qrCode: {
@@ -30,6 +37,29 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isDownloading, setIsDownloading] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+
+  // Generate QR code preview
+  useEffect(() => {
+    const generateQRCode = async () => {
+      try {
+        const shortUrl = `${window.location.origin}/r/${qrCode.shortCode}`;
+        const dataUrl = await QRCode.toDataURL(shortUrl, {
+          width: 200,
+          margin: 1,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF'
+          }
+        });
+        setQrCodeDataUrl(dataUrl);
+      } catch (error) {
+        console.error('Error generating QR code:', error);
+      }
+    };
+    
+    generateQRCode();
+  }, [qrCode.shortCode]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -115,9 +145,17 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
         
         {/* QR Code Preview */}
         <div className="bg-white p-4 rounded-lg mb-4 flex items-center justify-center border">
-          <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center">
-            <span className="text-xs text-muted-foreground">QR Preview</span>
-          </div>
+          {qrCodeDataUrl ? (
+            <img 
+              src={qrCodeDataUrl} 
+              alt={`QR Code for ${qrCode.name}`}
+              className="w-32 h-32"
+            />
+          ) : (
+            <div className="w-32 h-32 bg-muted rounded-lg flex items-center justify-center">
+              <span className="text-xs text-muted-foreground">Loading...</span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between text-sm mb-4">

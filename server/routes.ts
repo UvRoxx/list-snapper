@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import express from "express";
 import { createServer, type Server } from "http";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -10,7 +11,8 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { Strategy as FacebookStrategy } from "passport-facebook";
 import { storage } from "./storage";
-import { insertUserSchema, loginSchema, insertQrCodeSchema, insertOrderSchema } from "@shared/schema";
+import { storage as cartStorage } from "./cart";
+import { insertUserSchema, loginSchema, insertQrCodeSchema, insertOrderSchema, insertCartItemSchema } from "@shared/schema";
 import { z } from "zod";
 
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -574,12 +576,223 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Direct upgrade endpoint - called after payment success
+  app.post("/api/upgrade-user-tier", authenticateToken, async (req: any, res) => {
+    try {
+      const { paymentIntentId } = req.body;
+      
+      console.log('🔄 Manual tier upgrade requested for payment:', paymentIntentId);
+      
+      const user = await storage.getUser(req.user.userId);
+      if (!user || !user.stripeSubscriptionId) {
+        return res.status(404).json({ message: "No subscription found" });
+      }
+
+      // Get subscription from Stripe
+      const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+      const priceId = subscription.items.data[0].price.id;
+      
+      // Find the tier
+      const tiers = await storage.getMembershipTiers();
+      const tier = tiers.find(t => t.stripePriceId === priceId);
+      
+      if (!tier) {
+        return res.status(404).json({ message: "Tier not found" });
+      }
+
+      // Update membership
+      const existingMembership = await storage.getUserMembership(user.id);
+      
+      if (existingMembership) {
+        await storage.updateUserMembership(user.id, { tierName: tier.name as any });
+      } else {
+        await storage.createUserMembership({
+          userId: user.id,
+          tierName: tier.name as any,
+          isActive: true,
+          expiresAt: null
+        });
+      }
+      
+      console.log(`🎉 MANUALLY UPGRADED ${user.email} to ${tier.name}!`);
+      
+      res.json({ 
+        success: true, 
+        tier: tier.name,
+        message: "Tier upgraded successfully" 
+      });
+    } catch (error: any) {
+      console.error('Manual upgrade error:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Simple webhook handler 
+  app.post("/api/webhooks/stripe", express.raw({ type: 'application/json' }), async (req, res) => {
+    console.log('Webhook received - raw body type:', typeof req.body);
+    res.json({ received: true });
+  });
+
   // Subscription routes
   app.get("/api/subscriptions/tiers", async (req, res) => {
     try {
       const tiers = await storage.getMembershipTiers();
       res.json(tiers);
     } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Check and update subscription status (useful for testing without webhooks)
+  app.post("/api/subscriptions/check-status", authenticateToken, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.user.userId);
+      if (!user || !user.stripeSubscriptionId) {
+        return res.status(404).json({ message: "No subscription found" });
+      }
+
+      // Retrieve subscription from Stripe
+      const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId, {
+        expand: ['latest_invoice.payment_intent']
+      });
+      
+      console.log('Checking subscription status:', {
+        id: subscription.id,
+        status: subscription.status,
+        customerId: subscription.customer
+      });
+
+      // If subscription is incomplete, try to activate it with the payment method from setup intent
+      if (subscription.status === 'incomplete' || subscription.status === 'incomplete_expired') {
+        console.log('Subscription is incomplete, checking for completed setup intents...');
+        
+        // Check for successful setup intents
+        const setupIntents = await stripe.setupIntents.list({
+          customer: user.stripeCustomerId!,
+          limit: 10,
+        });
+        
+        const successfulSetup = setupIntents.data.find(si => 
+          si.status === 'succeeded' && 
+          si.metadata.subscription_id === subscription.id &&
+          si.payment_method
+        );
+        
+        if (successfulSetup) {
+          console.log('Found successful setup intent with payment method:', successfulSetup.payment_method);
+          
+          try {
+            const paymentMethodId = successfulSetup.payment_method as string;
+            
+            // Set this as the default payment method on the subscription
+            console.log('Updating subscription with payment method...');
+            const updatedSub = await stripe.subscriptions.update(subscription.id, {
+              default_payment_method: paymentMethodId,
+            });
+            
+            console.log('Subscription updated, new status:', updatedSub.status);
+            
+            // If still incomplete, manually pay the first invoice
+            if (updatedSub.status === 'incomplete') {
+              const latestInvoice = await stripe.invoices.retrieve(updatedSub.latest_invoice as string);
+              
+              if (latestInvoice && !latestInvoice.paid) {
+                console.log('Paying first invoice with payment method...');
+                await stripe.invoices.pay(latestInvoice.id, {
+                  payment_method: paymentMethodId,
+                });
+              }
+              
+              // Re-retrieve after payment
+              const finalSub = await stripe.subscriptions.retrieve(subscription.id);
+              console.log('Final subscription status:', finalSub.status);
+              
+              if (finalSub.status === 'active') {
+                const priceId = finalSub.items.data[0].price.id;
+                const tiers = await storage.getMembershipTiers();
+                const tier = tiers.find(t => t.stripePriceId === priceId);
+                
+                if (tier) {
+                  const existingMembership = await storage.getUserMembership(user.id);
+                  
+                  if (existingMembership) {
+                    await storage.updateUserMembership(user.id, { tierName: tier.name as any });
+                  } else {
+                    await storage.createUserMembership({
+                      userId: user.id,
+                      tierName: tier.name as any,
+                      isActive: true,
+                      expiresAt: null
+                    });
+                  }
+                  
+                  console.log(`✅ Activated ${tier.name} membership for ${user.email}`);
+                  
+                  return res.json({ 
+                    success: true, 
+                    tier: tier.name,
+                    status: finalSub.status 
+                  });
+                }
+              }
+            }
+          } catch (activationError: any) {
+            console.error('Error activating subscription:', activationError.message);
+            return res.json({ 
+              success: false, 
+              status: subscription.status,
+              message: `Error: ${activationError.message}` 
+            });
+          }
+        }
+        
+        return res.json({ 
+          success: false, 
+          status: subscription.status,
+          message: "Waiting for payment method setup to complete." 
+        });
+      }
+
+      if (subscription.status === 'active' || subscription.status === 'trialing') {
+        // Get the tier from the subscription
+        const priceId = subscription.items.data[0].price.id;
+        const tiers = await storage.getMembershipTiers();
+        const tier = tiers.find(t => t.stripePriceId === priceId);
+        
+        if (tier) {
+          // Check if user already has a membership
+          const existingMembership = await storage.getUserMembership(user.id);
+          
+          if (existingMembership) {
+            await storage.updateUserMembership(user.id, tier.id);
+            console.log(`✅ Updated user ${user.email} membership to ${tier.name}`);
+          } else {
+            await storage.createUserMembership({
+              userId: user.id,
+              tierId: tier.id,
+              status: 'active',
+              currentPeriodEnd: new Date(subscription.current_period_end * 1000)
+            });
+            console.log(`✅ Created user ${user.email} membership for ${tier.name}`);
+          }
+          
+          res.json({ 
+            success: true, 
+            tier: tier.name,
+            status: subscription.status 
+          });
+        } else {
+          res.status(404).json({ message: "Tier not found for this subscription" });
+        }
+      } else {
+        res.json({ 
+          success: false, 
+          status: subscription.status,
+          message: "Subscription is not active yet" 
+        });
+      }
+    } catch (error: any) {
+      console.error('Error checking subscription status:', error);
       res.status(400).json({ message: error.message });
     }
   });
@@ -613,20 +826,243 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateUserStripeInfo(user.id, customerId);
       }
 
-      // Create subscription
+      // Create subscription with proper payment behavior for immediate payment
       const subscription = await stripe.subscriptions.create({
         customer: customerId,
         items: [{ price: tier.stripePriceId }],
         payment_behavior: 'default_incomplete',
+        payment_settings: {
+          save_default_payment_method: 'on_subscription',
+          payment_method_types: ['card']
+        },
         expand: ['latest_invoice.payment_intent'],
+        collection_method: 'charge_automatically',
       });
+
+      console.log('Subscription created:', {
+        id: subscription.id,
+        status: subscription.status
+      });
+
+      const invoice = subscription.latest_invoice as any;
+      
+      if (!invoice) {
+        return res.status(500).json({ message: "Failed to create invoice" });
+      }
+
+      let clientSecret: string;
+      
+      // Check if invoice has payment intent
+      if (invoice.payment_intent?.client_secret) {
+        clientSecret = invoice.payment_intent.client_secret;
+        console.log('Using existing payment intent:', invoice.payment_intent.id);
+      } else {
+        // Create payment intent manually for this invoice
+        console.log('Creating payment intent for invoice amount:', invoice.amount_due);
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: invoice.amount_due,
+          currency: invoice.currency,
+          customer: customerId,
+          payment_method_types: ['card'],
+          metadata: {
+            subscription_id: subscription.id,
+            invoice_id: invoice.id,
+          },
+        });
+        
+        clientSecret = paymentIntent.client_secret!;
+        console.log('Created payment intent:', paymentIntent.id);
+      }
 
       await storage.updateUserStripeInfo(user.id, customerId, subscription.id);
 
       res.json({
         subscriptionId: subscription.id,
-        clientSecret: (subscription.latest_invoice as any)?.payment_intent?.client_secret,
+        clientSecret: clientSecret,
       });
+    } catch (error: any) {
+      console.error('Error creating subscription checkout:', error);
+      res.status(400).json({ message: error.message || "Failed to create subscription" });
+    }
+  });
+
+  // Get user's invoices from Stripe
+  app.get("/api/billing/invoices", authenticateToken, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.user.userId);
+      if (!user || !user.stripeCustomerId) {
+        return res.json({ invoices: [] });
+      }
+
+      const invoices = await stripe.invoices.list({
+        customer: user.stripeCustomerId,
+        limit: 100,
+      });
+
+      res.json({ 
+        invoices: invoices.data.map(inv => ({
+          id: inv.id,
+          number: inv.number,
+          amount: inv.amount_due / 100,
+          currency: inv.currency.toUpperCase(),
+          status: inv.status,
+          created: inv.created,
+          paid: inv.paid,
+          invoicePdf: inv.invoice_pdf,
+          hostedInvoiceUrl: inv.hosted_invoice_url,
+        }))
+      });
+    } catch (error: any) {
+      console.error('Error fetching invoices:', error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Get subscription details with payment method
+  app.get("/api/billing/subscription", authenticateToken, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.user.userId);
+      if (!user || !user.stripeSubscriptionId) {
+        return res.json({ subscription: null });
+      }
+
+      const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId, {
+        expand: ['default_payment_method']
+      });
+
+      const membership = await storage.getUserMembership(user.id);
+      let tierName = 'FREE';
+      if (membership) {
+        const tiers = await storage.getMembershipTiers();
+        const tier = tiers.find(t => t.id === membership.tierId);
+        if (tier) tierName = tier.name;
+      }
+
+      const paymentMethod = subscription.default_payment_method as any;
+
+      res.json({ 
+        subscription: {
+          id: subscription.id,
+          status: subscription.status,
+          currentPeriodEnd: subscription.current_period_end,
+          cancelAtPeriodEnd: subscription.cancel_at_period_end,
+          tierName,
+          paymentMethod: paymentMethod ? {
+            brand: paymentMethod.card?.brand,
+            last4: paymentMethod.card?.last4,
+            expMonth: paymentMethod.card?.exp_month,
+            expYear: paymentMethod.card?.exp_year,
+          } : null
+        }
+      });
+    } catch (error: any) {
+      console.error('Error fetching subscription:', error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Cancel subscription
+  app.post("/api/billing/cancel-subscription", authenticateToken, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.user.userId);
+      if (!user || !user.stripeSubscriptionId) {
+        return res.status(404).json({ message: "No active subscription" });
+      }
+
+      const subscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
+        cancel_at_period_end: true,
+      });
+
+      res.json({ 
+        success: true,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        currentPeriodEnd: subscription.current_period_end
+      });
+    } catch (error: any) {
+      console.error('Error canceling subscription:', error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Reactivate subscription
+  app.post("/api/billing/reactivate-subscription", authenticateToken, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.user.userId);
+      if (!user || !user.stripeSubscriptionId) {
+        return res.status(404).json({ message: "No active subscription" });
+      }
+
+      const subscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
+        cancel_at_period_end: false,
+      });
+
+      res.json({ 
+        success: true,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end
+      });
+    } catch (error: any) {
+      console.error('Error reactivating subscription:', error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Cart routes
+  app.get("/api/cart", authenticateToken, async (req: any, res) => {
+    try {
+      const cartItems = await cartStorage.getUserCartItems(req.user.userId);
+      res.json(cartItems);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/cart", authenticateToken, async (req: any, res) => {
+    try {
+      const cartData = insertCartItemSchema.parse(req.body);
+      const cartItem = await cartStorage.addToCart({
+        ...cartData,
+        userId: req.user.userId
+      });
+      res.json(cartItem);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/cart/:id", authenticateToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { quantity } = req.body;
+      const updated = await cartStorage.updateCartItemQuantity(id, req.user.userId, quantity);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/cart/:id", authenticateToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      await cartStorage.removeFromCart(id, req.user.userId);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/cart", authenticateToken, async (req: any, res) => {
+    try {
+      await cartStorage.clearCart(req.user.userId);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/cart/count", authenticateToken, async (req: any, res) => {
+    try {
+      const count = await cartStorage.getCartItemCount(req.user.userId);
+      res.json({ count });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
@@ -678,16 +1114,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/orders/:id/status", authenticateToken, authenticateAdmin, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      const order = await storage.updateOrderStatus(id, status);
+      res.json(order);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/orders", authenticateToken, authenticateAdmin, async (req: any, res) => {
+    try {
+      const orders = await storage.getAllOrders();
+      res.json(orders);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Stripe payment intent for one-time payments
   app.post("/api/create-payment-intent", authenticateToken, async (req, res) => {
     try {
       const { amount } = req.body;
+      
+      if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+
+      const amountInCents = Math.round(parseFloat(amount) * 100);
+      
+      console.log('Creating payment intent for amount:', amountInCents, 'cents ($' + amount + ')');
+      
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(parseFloat(amount) * 100), // Convert to cents
+        amount: amountInCents,
         currency: "usd",
+        automatic_payment_methods: {
+          enabled: true,
+        },
       });
+      
       res.json({ clientSecret: paymentIntent.client_secret });
     } catch (error: any) {
+      console.error('Stripe payment intent error:', error);
       res.status(500).json({ message: "Error creating payment intent: " + error.message });
     }
   });
