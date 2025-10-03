@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/hooks/use-auth";
+import "./lib/i18n";
 import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Pricing from "@/pages/pricing";

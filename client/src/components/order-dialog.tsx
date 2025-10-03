@@ -200,7 +200,7 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
     city: "",
     state: "",
     zipCode: "",
-    country: "US",
+    country: "United States",
   });
   const [saveAddress, setSaveAddress] = useState(false);
   const [total, setTotal] = useState(0);
@@ -233,7 +233,7 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
     if (user?.savedAddress) {
       try {
         const saved = JSON.parse(user.savedAddress);
-        setShippingAddress(saved);
+        setShippingAddress({ ...saved, country: "United States" });
       } catch (e) {
         console.error("Failed to parse saved address");
       }
@@ -699,7 +699,7 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="zipCode">ZIP/Postal Code</Label>
+                          <Label htmlFor="zipCode">ZIP Code</Label>
                           <Input
                             id="zipCode"
                             value={shippingAddress.zipCode}
@@ -714,14 +714,21 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
                           <Label htmlFor="country">Country</Label>
                           <Input
                             id="country"
-                            value={shippingAddress.country}
-                            onChange={(e) =>
-                              setShippingAddress({ ...shippingAddress, country: e.target.value })
-                            }
-                            placeholder="US"
+                            value="United States"
+                            disabled
+                            className="bg-muted cursor-not-allowed"
                             data-testid="input-country"
                           />
                         </div>
+                      </div>
+
+                      <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mt-4">
+                        <p className="text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                          <svg className="h-4 w-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                          </svg>
+                          <span>Physical product orders are currently available for USA addresses only.</span>
+                        </p>
                       </div>
 
                       <div className="flex items-center space-x-2 pt-2">
