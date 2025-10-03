@@ -7,27 +7,34 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/use-auth";
-import { useToast } from "@/hooks/use-toast";
-import { QrCode } from "lucide-react";
+import { QrCode, AlertCircle } from "lucide-react";
 import { SiGoogle, SiFacebook } from "react-icons/si";
 
 export default function Login() {
   const [, setLocation] = useLocation();
   const { login } = useAuth();
-  const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [errorDialog, setErrorDialog] = useState<{ title: string; message: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email || !password) {
-      toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive"
+      setErrorDialog({
+        title: "Missing Information",
+        message: "Please fill in all fields to continue."
       });
       return;
     }
@@ -36,15 +43,28 @@ export default function Login() {
     
     try {
       await login(email, password);
-      toast({
-        title: "Success",
-        description: "Welcome back!"
-      });
     } catch (error: any) {
-      toast({
+      const errorMessage = error.message || "Invalid credentials";
+      
+      // Parse better error messages
+      let displayMessage = errorMessage;
+      if (errorMessage.includes("Invalid credentials")) {
+        displayMessage = "The email or password you entered is incorrect. Please try again.";
+      } else if (errorMessage.includes("400")) {
+        try {
+          const jsonMatch = errorMessage.match(/\{.*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            displayMessage = parsed.message || displayMessage;
+          }
+        } catch (e) {
+          // Keep original message if parsing fails
+        }
+      }
+      
+      setErrorDialog({
         title: "Login Failed",
-        description: error.message || "Invalid credentials",
-        variant: "destructive"
+        message: displayMessage
       });
     } finally {
       setIsLoading(false);
@@ -158,6 +178,27 @@ export default function Login() {
           </Card>
         </div>
       </section>
+
+      <AlertDialog open={!!errorDialog} onOpenChange={(open) => !open && setErrorDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+              </div>
+              <AlertDialogTitle>{errorDialog?.title}</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-base pt-2">
+              {errorDialog?.message}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setErrorDialog(null)} data-testid="button-error-ok">
+              Got it
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

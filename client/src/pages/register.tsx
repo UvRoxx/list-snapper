@@ -6,14 +6,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/use-auth";
-import { useToast } from "@/hooks/use-toast";
-import { QrCode } from "lucide-react";
+import { QrCode, AlertCircle } from "lucide-react";
 import { SiGoogle, SiFacebook } from "react-icons/si";
 
 export default function Register() {
   const { register } = useAuth();
-  const { toast } = useToast();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -22,6 +29,7 @@ export default function Register() {
     company: ""
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [errorDialog, setErrorDialog] = useState<{ title: string; message: string } | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
@@ -34,19 +42,17 @@ export default function Register() {
     e.preventDefault();
     
     if (!formData.email || !formData.password) {
-      toast({
-        title: "Error",
-        description: "Please fill in all required fields",
-        variant: "destructive"
+      setErrorDialog({
+        title: "Missing Information",
+        message: "Please fill in all required fields to continue."
       });
       return;
     }
 
     if (formData.password.length < 6) {
-      toast({
-        title: "Error",
-        description: "Password must be at least 6 characters long",
-        variant: "destructive"
+      setErrorDialog({
+        title: "Password Too Short",
+        message: "Your password must be at least 6 characters long for security."
       });
       return;
     }
@@ -55,15 +61,32 @@ export default function Register() {
     
     try {
       await register(formData);
-      toast({
-        title: "Success",
-        description: "Account created successfully!"
-      });
     } catch (error: any) {
-      toast({
+      const errorMessage = error.message || "An error occurred during registration";
+      
+      // Parse better error messages
+      let displayMessage = errorMessage;
+      if (errorMessage.includes("User already exists")) {
+        displayMessage = "An account with this email already exists. Please try logging in instead.";
+      } else if (errorMessage.includes("400")) {
+        try {
+          const jsonMatch = errorMessage.match(/\{.*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.message === "User already exists") {
+              displayMessage = "An account with this email already exists. Please try logging in instead.";
+            } else {
+              displayMessage = parsed.message || displayMessage;
+            }
+          }
+        } catch (e) {
+          // Keep original message if parsing fails
+        }
+      }
+      
+      setErrorDialog({
         title: "Registration Failed",
-        description: error.message || "An error occurred during registration",
-        variant: "destructive"
+        message: displayMessage
       });
     } finally {
       setIsLoading(false);
@@ -213,6 +236,27 @@ export default function Register() {
           </Card>
         </div>
       </section>
+
+      <AlertDialog open={!!errorDialog} onOpenChange={(open) => !open && setErrorDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+              </div>
+              <AlertDialogTitle>{errorDialog?.title}</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="text-base pt-2">
+              {errorDialog?.message}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setErrorDialog(null)} data-testid="button-error-ok">
+              Got it
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
