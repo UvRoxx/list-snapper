@@ -259,16 +259,6 @@ export default function Settings() {
                         <Button data-testid="button-change-password">Update Password</Button>
                       </div>
                     </div>
-
-                    <div className="border-t pt-6">
-                      <h3 className="text-lg font-semibold mb-4">Two-Factor Authentication</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Add an extra layer of security to your account
-                      </p>
-                      <Button variant="outline" data-testid="button-enable-2fa">
-                        Enable 2FA
-                      </Button>
-                    </div>
                   </CardContent>
                 </Card>
               )}
