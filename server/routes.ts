@@ -268,6 +268,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const updates = insertQrCodeSchema.partial().parse(req.body);
       
+      // If destination URL is being changed, save the current URL to history
+      if (updates.destinationUrl) {
+        const currentQrCode = await storage.getQrCode(id);
+        if (currentQrCode && currentQrCode.destinationUrl !== updates.destinationUrl) {
+          await storage.createQrCodeUrlHistory(id, currentQrCode.destinationUrl);
+        }
+      }
+      
       const qrCode = await storage.updateQrCode(id, updates);
       res.json(qrCode);
     } catch (error: any) {
@@ -290,6 +298,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const analytics = await storage.getQrCodeAnalytics(id);
       res.json(analytics);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/qr-codes/:id/url-history", authenticateToken, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const history = await storage.getQrCodeUrlHistory(id);
+      res.json(history);
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }

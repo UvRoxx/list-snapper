@@ -2,6 +2,7 @@ import {
   users, 
   qrCodes, 
   qrCodeScans,
+  qrCodeUrlHistory,
   orders,
   membershipTiers,
   userMemberships,
@@ -11,6 +12,7 @@ import {
   type QrCode,
   type InsertQrCode,
   type QrCodeScan,
+  type QrCodeUrlHistory,
   type Order,
   type InsertOrder,
   type MembershipTier,
@@ -40,6 +42,10 @@ export interface IStorage {
   getQrCodeScans(qrCodeId: string): Promise<QrCodeScan[]>;
   getQrCodeAnalytics(qrCodeId: string): Promise<any>;
   getUserAnalytics(userId: string, timeRange?: string): Promise<any>;
+
+  // QR Code URL History methods
+  createQrCodeUrlHistory(qrCodeId: string, destinationUrl: string): Promise<QrCodeUrlHistory>;
+  getQrCodeUrlHistory(qrCodeId: string): Promise<QrCodeUrlHistory[]>;
 
   // Membership methods
   getMembershipTiers(): Promise<MembershipTier[]>;
@@ -320,6 +326,22 @@ export class DatabaseStorage implements IStorage {
       locationBreakdown,
       scanTimeSeries,
     };
+  }
+
+  async createQrCodeUrlHistory(qrCodeId: string, destinationUrl: string): Promise<QrCodeUrlHistory> {
+    const [history] = await db
+      .insert(qrCodeUrlHistory)
+      .values({ qrCodeId, destinationUrl })
+      .returning();
+    return history;
+  }
+
+  async getQrCodeUrlHistory(qrCodeId: string): Promise<QrCodeUrlHistory[]> {
+    return await db
+      .select()
+      .from(qrCodeUrlHistory)
+      .where(eq(qrCodeUrlHistory.qrCodeId, qrCodeId))
+      .orderBy(desc(qrCodeUrlHistory.changedAt));
   }
 
   async getMembershipTiers(): Promise<MembershipTier[]> {
