@@ -11,11 +11,9 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Check, Crown, ArrowLeft } from "lucide-react";
 
-if (!import.meta.env.VITE_STRIPE_PUBLIC_KEY) {
-  throw new Error('Missing required Stripe key: VITE_STRIPE_PUBLIC_KEY');
-}
+const STRIPE_PUBLIC_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_test_51SD9PpDtmSuWvYXlF0NZB2dZ9QkYM6rvtwJLRWjjn3GTCHhZnCA2k5M1C5Ly8yGxpTk6aP3vqicLPKYTJF6VpoBj00eZwBNC2c';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+const stripePromise = loadStripe(STRIPE_PUBLIC_KEY);
 
 const CheckoutForm = ({ tier }: { tier: string }) => {
   const stripe = useStripe();
