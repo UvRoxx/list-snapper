@@ -16,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Package, CreditCard, CheckCircle2, Sticker, SignpostBig, Flag, FileImage, Check } from "lucide-react";
+import { Loader2, Package, CreditCard, CheckCircle2, Sticker, SignpostBig, Check } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { useAuth } from "@/hooks/use-auth";
@@ -62,20 +62,6 @@ const products = [
     name: "Yard Sign",
     description: "18x24 corrugated plastic sign",
     icon: SignpostBig,
-  },
-  {
-    type: "banner",
-    name: "Banner",
-    description: "Large vinyl banner (coming soon)",
-    icon: Flag,
-    disabled: true,
-  },
-  {
-    type: "poster",
-    name: "Poster",
-    description: "High-quality printed poster (coming soon)",
-    icon: FileImage,
-    disabled: true,
   },
 ];
 
@@ -504,8 +490,8 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
                           productType === product.type
                             ? "ring-2 ring-primary"
                             : ""
-                        } ${product.disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-                        onClick={() => !product.disabled && setProductType(product.type)}
+                        }`}
+                        onClick={() => setProductType(product.type)}
                         data-testid={`card-product-${product.type}`}
                       >
                         <CardContent className="pt-6 text-center space-y-3">
