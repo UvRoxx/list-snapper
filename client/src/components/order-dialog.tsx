@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Package, CreditCard, CheckCircle2, Sticker, SignpostBig, Flag, FileImage, Check } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
@@ -200,7 +201,7 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
     city: "",
     state: "",
     zipCode: "",
-    country: "United States",
+    country: "USA",
   });
   const [saveAddress, setSaveAddress] = useState(false);
   const [total, setTotal] = useState(0);
@@ -233,7 +234,13 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
     if (user?.savedAddress) {
       try {
         const saved = JSON.parse(user.savedAddress);
-        setShippingAddress({ ...saved, country: "United States" });
+        // Normalize legacy country values
+        if (saved.country === "United States" || saved.country === "US") {
+          saved.country = "USA";
+        } else if (saved.country === "United Kingdom") {
+          saved.country = "UK";
+        }
+        setShippingAddress(saved);
       } catch (e) {
         console.error("Failed to parse saved address");
       }
@@ -295,11 +302,22 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
   };
 
   const handleCreatePaymentIntent = async () => {
-    const { fullName, address, city, state, zipCode } = shippingAddress;
+    const { fullName, address, city, state, zipCode, country } = shippingAddress;
     if (!fullName || !address || !city || !state || !zipCode) {
       toast({
         title: "Complete Address Required",
         description: "Please fill in all address fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate yard sign orders are only for USA
+    const isUSA = country === "USA" || country === "United States" || country === "US";
+    if (productType === "yard_sign" && !isUSA) {
+      toast({
+        title: "Invalid Shipping Country",
+        description: "Yard signs can only be shipped to USA addresses. Please change your country to USA or select stickers instead.",
         variant: "destructive",
       });
       return;
@@ -712,22 +730,45 @@ export function OrderDialog({ open, onOpenChange, qrCodeId }: OrderDialogProps) 
                         </div>
                         <div>
                           <Label htmlFor="country">Country</Label>
-                          <Input
-                            id="country"
-                            value="United States"
-                            disabled
-                            className="bg-muted cursor-not-allowed"
-                            data-testid="input-country"
-                          />
+                          <Select
+                            value={shippingAddress.country}
+                            onValueChange={(value) =>
+                              setShippingAddress({ ...shippingAddress, country: value })
+                            }
+                          >
+                            <SelectTrigger id="country" data-testid="select-country">
+                              <SelectValue placeholder="Select country" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="USA">United States</SelectItem>
+                              <SelectItem value="Canada">Canada</SelectItem>
+                              <SelectItem value="UK">United Kingdom</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
+
+                      {productType === "yard_sign" && shippingAddress.country !== "USA" && shippingAddress.country !== "United States" && shippingAddress.country !== "US" && (
+                        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mt-4">
+                          <p className="text-sm text-amber-900 dark:text-amber-100 flex items-center gap-2">
+                            <svg className="h-4 w-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                            <span>Yard signs are only available for USA addresses. Please select USA or choose stickers instead.</span>
+                          </p>
+                        </div>
+                      )}
 
                       <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mt-4">
                         <p className="text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
                           <svg className="h-4 w-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                           </svg>
-                          <span>Physical product orders are currently available for USA addresses only.</span>
+                          <span>
+                            {productType === "yard_sign" 
+                              ? "Yard signs are available for USA addresses only."
+                              : "Stickers are available for USA, Canada, and UK addresses."}
+                          </span>
                         </p>
                       </div>
 
