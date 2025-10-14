@@ -57,6 +57,7 @@ export const qrCodes = pgTable("qr_codes", {
   customColor: text("custom_color").default("#000000"),
   customBgColor: text("custom_bg_color").default("#FFFFFF"),
   customText: text("custom_text"),
+  textPosition: text("text_position").default("bottom"),
   logoUrl: text("logo_url"),
   scanCount: integer("scan_count").default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -196,6 +197,7 @@ export const insertQrCodeSchema = createInsertSchema(qrCodes).pick({
   customColor: true,
   customBgColor: true,
   customText: true,
+  textPosition: true,
   logoUrl: true,
   isActive: true,
 });

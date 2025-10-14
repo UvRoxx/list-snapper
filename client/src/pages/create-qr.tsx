@@ -28,6 +28,7 @@ export default function CreateQR() {
     customColor: "#000000",
     customBgColor: "#FFFFFF",
     customText: "",
+    textPosition: "bottom" as "top" | "bottom",
     isActive: true,
   });
 
@@ -261,7 +262,33 @@ export default function CreateQR() {
                         maxLength={50}
                         data-testid="input-custom-text"
                       />
-                      <p className="text-xs text-muted-foreground mt-1">Text will appear below your QR code (max 50 characters)</p>
+                      <p className="text-xs text-muted-foreground mt-1">Text will appear on your QR code image (max 50 characters)</p>
+                      
+                      {formData.customText && (
+                        <div className="mt-3">
+                          <Label className="text-xs">Text Position</Label>
+                          <div className="flex gap-2 mt-2">
+                            <Button
+                              type="button"
+                              variant={formData.textPosition === "top" ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handleChange("textPosition", "top")}
+                              className="flex-1"
+                            >
+                              Top
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={formData.textPosition === "bottom" ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handleChange("textPosition", "bottom")}
+                              className="flex-1"
+                            >
+                              Bottom
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center space-x-3">
                       <Checkbox

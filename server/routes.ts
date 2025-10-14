@@ -603,7 +603,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         width: 512
       });
 
-      res.json({ dataUrl: qrDataUrl });
+      // Return QR data along with custom text and position for client-side rendering
+      res.json({ 
+        dataUrl: qrDataUrl,
+        customText: qrCode.customText,
+        textPosition: qrCode.textPosition || 'bottom'
+      });
     } catch (error: any) {
       res.status(400).json({ message: error.message });
     }
