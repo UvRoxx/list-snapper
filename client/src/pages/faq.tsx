@@ -99,15 +99,39 @@ const faqData = [
     questions: [
       {
         q: "What analytics are available on the Free plan?",
-        a: "Free plan shows basic scan counts. Upgrade to Standard or Pro for detailed analytics including location data, operating systems, peak hours, and time series data."
+        a: "Free plan includes basic scan count only. You can see how many times each QR code has been scanned on your dashboard."
+      },
+      {
+        q: "What analytics come with Standard and Pro plans?",
+        a: "Standard & Pro plans include: Total Scans, Unique Visitors (by IP), Location Analytics (country breakdown with flags), Operating System Distribution (Windows, Mac, iOS, Android, Linux), Time Series Charts (daily/weekly/monthly), Peak Hour Analysis (when most scans happen), Average Daily Scans, and the ability to Export all data to CSV."
+      },
+      {
+        q: "What's the difference between Standard and Pro analytics?",
+        a: "Standard and Pro have the same analytics features. The main difference is that Pro includes API Access to your analytics data, allowing you to integrate with external tools and build custom dashboards."
       },
       {
         q: "How accurate is the location data?",
-        a: "Location data is based on IP geolocation and shows country-level accuracy. For privacy reasons, we don't track exact addresses."
+        a: "Location data is based on IP geolocation and shows country-level accuracy. You'll see which countries your QR codes are being scanned from, with percentages and country flags. For privacy reasons, we don't track exact addresses or cities."
       },
       {
         q: "Can I export my analytics data?",
-        a: "Standard and Pro users can export analytics data from the Analytics page using the Export button."
+        a: "Yes! Standard and Pro users can export analytics data from the Analytics page using the Export button. Data exports as CSV format with all metrics included."
+      },
+      {
+        q: "What is 'Unique Visitors' and how is it calculated?",
+        a: "Unique Visitors counts individual users based on their IP address. If the same person scans your QR code multiple times from the same location, they count as one unique visitor but multiple scans."
+      },
+      {
+        q: "Can I see real-time analytics?",
+        a: "Analytics update in real-time as scans occur. You can refresh the Analytics page to see the latest data. The dashboard also shows live scan counts."
+      },
+      {
+        q: "What time ranges can I view analytics for?",
+        a: "You can filter analytics by: Last 7 days, Last 30 days, Last 90 days, or All time. This helps you analyze trends over different periods."
+      },
+      {
+        q: "What is Peak Hour Analysis?",
+        a: "Peak Hour Analysis shows the hour of the day when your QR codes get the most scans (e.g., '14:00 - 15:00'). This helps you understand when your audience is most active."
       }
     ]
   }
