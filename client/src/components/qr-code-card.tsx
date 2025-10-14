@@ -5,12 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
-import { 
   Tooltip, 
   TooltipContent, 
   TooltipProvider, 
@@ -18,7 +12,7 @@ import {
 } from "@/components/ui/tooltip";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, Download, MoreVertical, Edit, Trash, BarChart3, Calendar, ExternalLink, Power } from "lucide-react";
+import { Eye, Download, Trash, BarChart3, Calendar, ExternalLink, Power } from "lucide-react";
 import QRCode from "qrcode";
 
 interface QrCodeCardProps {
@@ -202,52 +196,83 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <Link href={`/qr/${qrCode.id}`} className="flex-1">
-            <Button variant="secondary" className="w-full" data-testid="button-view-qr">
+        <div className="grid grid-cols-2 gap-2">
+          <Link href={`/qr/${qrCode.id}`} className="col-span-2">
+            <Button variant="default" className="w-full" data-testid="button-view-qr">
               <Eye className="h-4 w-4 mr-2" />
               View Details
             </Button>
           </Link>
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={handleDownload}
-            disabled={isDownloading}
-            data-testid="button-download-qr"
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" data-testid="button-qr-menu">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem 
-                onClick={() => toggleActiveMutation.mutate({ id: qrCode.id, isActive: !qrCode.isActive })}
-              >
-                <Power className="h-4 w-4 mr-2" />
-                {qrCode.isActive ? 'Deactivate' : 'Activate'}
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <BarChart3 className="h-4 w-4 mr-2" />
-                Analytics
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => deleteMutation.mutate(qrCode.id)}
-                className="text-destructive"
-              >
-                <Trash className="h-4 w-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={() => toggleActiveMutation.mutate({ id: qrCode.id, isActive: !qrCode.isActive })}
+                  data-testid="button-toggle-active"
+                >
+                  <Power className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{qrCode.isActive ? 'Deactivate' : 'Activate'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleDownload}
+                  disabled={isDownloading}
+                  data-testid="button-download-qr"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Download QR Code</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          <Link href={`/analytics`}>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full">
+                    <BarChart3 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>View Analytics</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </Link>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => deleteMutation.mutate(qrCode.id)}
+                  className="text-destructive hover:bg-destructive/10"
+                  data-testid="button-delete-qr"
+                >
+                  <Trash className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Delete QR Code</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </CardContent>
     </Card>
