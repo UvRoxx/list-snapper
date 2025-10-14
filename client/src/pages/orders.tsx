@@ -26,6 +26,7 @@ export default function Orders() {
     enabled: !!user
   });
 
+  // Handle orders opened from QR detail page via URL params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const qrId = params.get('qrId');
@@ -33,16 +34,10 @@ export default function Orders() {
     
     if (qrId) {
       setSelectedQrCodeId(qrId);
-      setSelectedProductType(type);
+      setSelectedProductType(type || 'sticker');
       setOrderDialogOpen(true);
     }
   }, []);
-
-  const handleOpenOrderDialog = (productType: string) => {
-    setSelectedQrCodeId(null);
-    setSelectedProductType(productType);
-    setOrderDialogOpen(true);
-  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -77,103 +72,12 @@ export default function Orders() {
         
         <div className="bg-background border-b border-border">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <h1 className="text-3xl font-bold mb-2" data-testid="text-orders-title">Order Physical Products</h1>
-            <p className="text-muted-foreground">Get your QR codes printed on stickers or yard signs</p>
+            <h1 className="text-3xl font-bold mb-2" data-testid="text-orders-title">Order History</h1>
+            <p className="text-muted-foreground">View and track your sticker orders</p>
           </div>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Product Selection */}
-          <div className="grid lg:grid-cols-2 gap-8 mb-8">
-            {/* Stickers Product */}
-            <Card className="hover:shadow-lg transition-shadow" data-testid="card-sticker-product">
-              <div className="aspect-video bg-gradient-to-br from-primary/20 to-accent/20 p-8 flex items-center justify-center">
-                <img 
-                  src="https://images.unsplash.com/photo-1611162617474-5b21e879e113?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600" 
-                  alt="QR code stickers in different sizes" 
-                  className="w-full h-full object-cover rounded-lg"
-                  data-testid="img-stickers"
-                />
-              </div>
-              <CardContent className="p-6">
-                <h3 className="text-2xl font-bold mb-2">QR Code Stickers</h3>
-                <p className="text-muted-foreground mb-4">Weather-resistant, high-quality vinyl stickers</p>
-                
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-center space-x-2 text-sm">
-                    <Check className="h-4 w-4 text-primary" />
-                    <span>Waterproof & UV resistant</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm">
-                    <Check className="h-4 w-4 text-primary" />
-                    <span>3 sizes available (1", 2", 3")</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm">
-                    <Check className="h-4 w-4 text-primary" />
-                    <span>Bulk discounts available</span>
-                  </div>
-                </div>
-
-                <div className="bg-muted/50 rounded-lg p-4 mb-4">
-                  <div className="text-sm text-muted-foreground mb-2">Starting from</div>
-                  <div className="text-3xl font-bold">$0.50 <span className="text-lg font-normal text-muted-foreground">/ sticker</span></div>
-                </div>
-
-                <Button 
-                  onClick={() => handleOpenOrderDialog('sticker')}
-                  className="w-full"
-                  data-testid="button-order-stickers"
-                >
-                  Order Stickers
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Yard Signs Product */}
-            <Card className="hover:shadow-lg transition-shadow" data-testid="card-yard-sign-product">
-              <div className="aspect-video bg-gradient-to-br from-accent/20 to-primary/20 p-8 flex items-center justify-center">
-                <img 
-                  src="https://images.unsplash.com/photo-1603791440384-56cd371ee9a7?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=600" 
-                  alt="QR code yard sign in outdoor setting" 
-                  className="w-full h-full object-cover rounded-lg"
-                  data-testid="img-yard-signs"
-                />
-              </div>
-              <CardContent className="p-6">
-                <h3 className="text-2xl font-bold mb-2">QR Code Yard Signs</h3>
-                <p className="text-muted-foreground mb-4">Durable 18"x24" signs with wire stakes</p>
-                
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-center space-x-2 text-sm">
-                    <Check className="h-4 w-4 text-primary" />
-                    <span>Weather-resistant corrugated plastic</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm">
-                    <Check className="h-4 w-4 text-primary" />
-                    <span>Includes H-wire stake</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm">
-                    <Check className="h-4 w-4 text-primary" />
-                    <span>Double-sided printing available</span>
-                  </div>
-                </div>
-
-                <div className="bg-muted/50 rounded-lg p-4 mb-4">
-                  <div className="text-sm text-muted-foreground mb-2">Starting from</div>
-                  <div className="text-3xl font-bold">$12.99 <span className="text-lg font-normal text-muted-foreground">/ sign</span></div>
-                </div>
-
-                <Button 
-                  onClick={() => handleOpenOrderDialog('yard_sign')}
-                  className="w-full"
-                  data-testid="button-order-yard-signs"
-                >
-                  Order Yard Signs
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-
           {/* Order History */}
           <Card data-testid="card-order-history">
             <CardHeader>
@@ -214,7 +118,7 @@ export default function Orders() {
                               </div>
                               <div>
                                 <div className="font-medium">
-                                  {order.productType === 'sticker' ? 'Stickers' : 'Yard Sign'}
+                                  Stickers
                                   {order.size && ` (${order.size})`}
                                   {order.quantity && ` x ${order.quantity}`}
                                 </div>

@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Navigation } from "@/components/navigation";
 import { ProtectedRoute } from "@/components/protected-route";
@@ -8,37 +8,46 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, CloudUpload, QrCode } from "lucide-react";
+import { ArrowLeft, QrCode, AlertTriangle } from "lucide-react";
 
 export default function CreateQR() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: planLimits, isLoading: isPlanLimitsLoading } = useQuery<any>({
+    queryKey: ['/api/plan-limits']
+  });
 
   const [formData, setFormData] = useState({
     name: "",
     destinationUrl: "",
     customColor: "#000000",
     customBgColor: "#FFFFFF",
-    logoUrl: "",
+    customText: "",
     isActive: true,
   });
 
   const [previewData, setPreviewData] = useState({
-    shortCode: "AB12CD34", // Preview placeholder
-    fullUrl: "listsnap.io/r/AB12CD34"
+    shortCode: "PREVIEW", // Preview placeholder
+    fullUrl: `${window.location.origin}/r/PREVIEW`
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
       const response = await apiRequest('POST', '/api/qr-codes', data);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create QR code');
+      }
       return response.json();
     },
     onSuccess: (qrCode) => {
       queryClient.invalidateQueries({ queryKey: ['/api/qr-codes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/plan-limits'] });
       toast({
         title: "Success",
         description: "QR code created successfully!"
@@ -84,10 +93,6 @@ export default function CreateQR() {
     createMutation.mutate(formData);
   };
 
-  const handleFileUpload = () => {
-    fileInputRef.current?.click();
-  };
-
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-muted/30">
@@ -96,15 +101,32 @@ export default function CreateQR() {
         <div className="min-h-screen py-12">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="mb-8">
-              <Link href="/dashboard">
-                <Button variant="ghost" className="mb-4" data-testid="button-back-dashboard">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Dashboard
-                </Button>
-              </Link>
+              <div className="sticky top-16 z-10 bg-muted/95 backdrop-blur-sm -mx-4 px-4 py-2 mb-4">
+                <Link href="/dashboard">
+                  <Button variant="ghost" data-testid="button-back-dashboard">
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back to Dashboard
+                  </Button>
+                </Link>
+              </div>
               <h1 className="text-3xl font-bold" data-testid="text-create-qr-title">Create New QR Code</h1>
               <p className="text-muted-foreground mt-2">Design and customize your QR code</p>
             </div>
+
+            {/* Plan Limit Warning */}
+            {planLimits && !planLimits.canCreateMore && (
+              <Alert variant="destructive" className="mb-6">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>QR Code Limit Reached</AlertTitle>
+                <AlertDescription>
+                  You've reached your {planLimits.displayName} plan limit of {planLimits.maxQrCodes} QR codes.{' '}
+                  <Link href="/pricing">
+                    <span className="underline cursor-pointer font-semibold">Upgrade your plan</span>
+                  </Link>{' '}
+                  to create more QR codes, or delete some existing codes first.
+                </AlertDescription>
+              </Alert>
+            )}
 
             <div className="grid lg:grid-cols-3 gap-8">
               {/* Form Section */}
@@ -123,6 +145,8 @@ export default function CreateQR() {
                         value={formData.name}
                         onChange={(e) => handleChange("name", e.target.value)}
                         data-testid="input-qr-name"
+                        maxLength={50}
+                        className="max-w-md"
                       />
                     </div>
                     <div>
@@ -146,6 +170,42 @@ export default function CreateQR() {
                     <CardTitle>Design Customization</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground mb-4">💡 Tip: Use your brand colors for better recognition</p>
+                    
+                    {/* Color Presets */}
+                    <div>
+                      <Label className="mb-3 block">Color Presets</Label>
+                      <div className="grid grid-cols-3 gap-2 mb-4">
+                        {[
+                          { name: 'Classic', fg: '#000000', bg: '#FFFFFF' },
+                          { name: 'Reverse', fg: '#FFFFFF', bg: '#000000' },
+                          { name: 'Ocean', fg: '#1E3A8A', bg: '#DBEAFE' },
+                          { name: 'Forest', fg: '#14532D', bg: '#DCFCE7' },
+                          { name: 'Sunset', fg: '#EA580C', bg: '#FEF3C7' },
+                          { name: 'Royal', fg: '#6B21A8', bg: '#F3E8FF' },
+                          { name: 'Cherry', fg: '#B91C1C', bg: '#FCE7F3' },
+                          { name: 'Corporate', fg: '#374151', bg: '#F3F4F6' },
+                          { name: 'Mint', fg: '#0F766E', bg: '#CCFBF1' },
+                        ].map((preset) => (
+                          <button
+                            key={preset.name}
+                            type="button"
+                            onClick={() => {
+                              handleChange("customColor", preset.fg);
+                              handleChange("customBgColor", preset.bg);
+                            }}
+                            className="flex flex-col items-center p-2 rounded-lg border-2 border-border hover:border-primary transition-colors cursor-pointer"
+                            title={preset.name}
+                          >
+                            <div className="w-full h-8 rounded flex items-center justify-center mb-1" style={{ backgroundColor: preset.bg }}>
+                              <div className="w-4 h-4 rounded" style={{ backgroundColor: preset.fg }}></div>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{preset.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <div>
                       <Label htmlFor="color">QR Code Color</Label>
                       <div className="flex items-center space-x-3">
@@ -182,24 +242,6 @@ export default function CreateQR() {
                         />
                       </div>
                     </div>
-                    <div>
-                      <Label>Logo (Optional)</Label>
-                      <div 
-                        onClick={handleFileUpload}
-                        className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary transition-colors cursor-pointer"
-                        data-testid="button-upload-logo"
-                      >
-                        <CloudUpload className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-                        <p className="text-sm text-muted-foreground">Click to upload or drag and drop</p>
-                        <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
-                      </div>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                      />
-                    </div>
                   </CardContent>
                 </Card>
 
@@ -209,6 +251,18 @@ export default function CreateQR() {
                     <CardTitle>Advanced Settings</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    <div>
+                      <Label htmlFor="customText">Custom Text (Optional)</Label>
+                      <Input
+                        id="customText"
+                        placeholder="e.g., Scan to view listing"
+                        value={formData.customText}
+                        onChange={(e) => handleChange("customText", e.target.value)}
+                        maxLength={50}
+                        data-testid="input-custom-text"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Text will appear below your QR code (max 50 characters)</p>
+                    </div>
                     <div className="flex items-center space-x-3">
                       <Checkbox
                         id="active"
@@ -257,10 +311,11 @@ export default function CreateQR() {
                     <Button 
                       onClick={handleSubmit}
                       className="w-full"
-                      disabled={createMutation.isPending}
+                      disabled={createMutation.isPending || !planLimits?.canCreateMore}
                       data-testid="button-create-qr-submit"
                     >
-                      {createMutation.isPending ? "Creating..." : "Create QR Code"}
+                      {createMutation.isPending ? "Creating..." : 
+                       !planLimits?.canCreateMore ? "Plan Limit Reached" : "Create QR Code"}
                     </Button>
                   </CardContent>
                 </Card>

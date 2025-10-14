@@ -1,15 +1,17 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Navigation } from "@/components/navigation";
 import { ProtectedRoute } from "@/components/protected-route";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCart } from "@/hooks/use-cart";
 import { ShoppingCart, Trash2, Plus, Minus, ArrowRight, Package } from "lucide-react";
 
 export default function Cart() {
+  const [, setLocation] = useLocation();
   const { cartItems, cartCount, updateQuantity, removeItem, clearCart, getCartTotal, isLoading } = useCart();
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
@@ -21,23 +23,18 @@ export default function Cart() {
   };
 
   const handleCheckout = () => {
-    // Navigate to checkout with cart mode
-    window.location.href = "/checkout-cart";
+    console.log('Navigating to checkout-cart with', cartItems.length, 'items');
+    setIsCheckingOut(true);
+    setLocation("/checkout-cart");
   };
 
   const getProductName = (productType: string, size?: string | null) => {
-    if (productType === "sticker") {
-      const sizeLabel = size === "small" ? '1"' : size === "medium" ? '2"' : '3"';
-      return `QR Stickers (${sizeLabel})`;
-    }
-    return "QR Yard Sign (18x24)";
+    const sizeLabel = size === "small" ? '1"' : size === "medium" ? '2"' : '3"';
+    return `QR Stickers (${sizeLabel})`;
   };
 
   const getItemPrice = (productType: string, size?: string | null) => {
-    if (productType === "sticker") {
-      return size === "small" ? 0.5 : size === "medium" ? 1.0 : 1.5;
-    }
-    return 12.99;
+    return size === "small" ? 0.5 : size === "medium" ? 1.0 : 1.5;
   };
 
   if (isLoading) {
@@ -113,14 +110,23 @@ export default function Cart() {
 
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between">
-                              <div>
+                              <div className="flex-1 min-w-0">
                                 <h3 className="font-semibold mb-1">{item.qrCode.name}</h3>
                                 <p className="text-sm text-muted-foreground mb-2">
                                   {getProductName(item.productType, item.size)}
                                 </p>
-                                <p className="text-xs text-muted-foreground truncate">
-                                  {item.qrCode.destinationUrl}
-                                </p>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <p className="text-xs text-muted-foreground truncate max-w-xs cursor-help">
+                                        {item.qrCode.destinationUrl}
+                                      </p>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-sm break-all">
+                                      <p>{item.qrCode.destinationUrl}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                               </div>
                               <Button
                                 variant="ghost"

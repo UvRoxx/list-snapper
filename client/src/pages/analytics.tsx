@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Navigation } from "@/components/navigation";
 import { ProtectedRoute } from "@/components/protected-route";
 import { Button } from "@/components/ui/button";
@@ -15,14 +16,15 @@ import {
   Download,
   Smartphone,
   Monitor,
-  Tablet
+  Tablet,
+  ArrowLeft
 } from "lucide-react";
 
 export default function Analytics() {
   const { user } = useAuth();
   const [timeRange, setTimeRange] = useState("7days");
   
-  const { data: analytics, isLoading } = useQuery({
+  const { data: analytics, isLoading } = useQuery<any>({
     queryKey: ['/api/analytics', { timeRange }],
     enabled: !!user
   });
@@ -40,17 +42,15 @@ export default function Analytics() {
     );
   }
 
-  const {
-    totalScans = 0,
-    uniqueVisitors = 0,
-    avgDailyScans = 0,
-    peakHour = 'N/A',
-    deviceBreakdown = {},
-    browserBreakdown = {},
-    osBreakdown = {},
-    locationBreakdown = {},
-    scanTimeSeries = []
-  } = analytics || {};
+  const totalScans = analytics?.totalScans || 0;
+  const uniqueVisitors = analytics?.uniqueVisitors || 0;
+  const avgDailyScans = analytics?.avgDailyScans || 0;
+  const peakHour = analytics?.peakHour || 'N/A';
+  const deviceBreakdown = analytics?.deviceBreakdown || {};
+  const browserBreakdown = analytics?.browserBreakdown || {};
+  const osBreakdown = analytics?.osBreakdown || {};
+  const locationBreakdown = analytics?.locationBreakdown || {};
+  const scanTimeSeries = analytics?.scanTimeSeries || [];
 
   // Calculate percentages for device breakdown
   const deviceTotal = Object.values(deviceBreakdown).reduce((sum: number, val: any) => sum + val, 0);
@@ -131,6 +131,14 @@ export default function Analytics() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="sticky top-16 z-10 bg-muted/95 backdrop-blur-sm -mx-4 px-4 py-2 mb-6">
+            <Link href="/dashboard">
+              <Button variant="ghost" data-testid="button-back-dashboard">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Dashboard
+              </Button>
+            </Link>
+          </div>
           {/* Overview Stats */}
           <div className="grid md:grid-cols-4 gap-6 mb-8">
             <Card data-testid="stat-total-scans">
@@ -232,42 +240,10 @@ export default function Analytics() {
               </CardContent>
             </Card>
 
-            {/* Device Breakdown */}
-            <Card data-testid="card-device-breakdown">
-              <CardHeader>
-                <CardTitle>Device Breakdown</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {devicePercentages.length > 0 ? (
-                  devicePercentages.map(({ device, count, percentage }) => {
-                    const icon = device === 'mobile' ? Smartphone : device === 'tablet' ? Tablet : Monitor;
-                    const Icon = icon;
-                    return (
-                      <div key={device}>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="flex items-center capitalize">
-                            <Icon className="h-4 w-4 text-chart-1 mr-2" />
-                            {device}
-                          </span>
-                          <span className="font-semibold">{percentage}%</span>
-                        </div>
-                        <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div className="h-full bg-chart-1 rounded-full" style={{width: `${percentage}%`}}></div>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center text-muted-foreground py-8">
-                    No device data available
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </div>
 
           {/* Charts Row 2 */}
-          <div className="grid lg:grid-cols-3 gap-6">
+          <div className="grid lg:grid-cols-2 gap-6">
             {/* Top Locations */}
             <Card data-testid="card-top-locations">
               <CardHeader>
@@ -292,37 +268,6 @@ export default function Analytics() {
                 ) : (
                   <div className="text-center text-muted-foreground py-8">
                     No location data available
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Browser Stats */}
-            <Card data-testid="card-browser-stats">
-              <CardHeader>
-                <CardTitle>Browser Distribution</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {topBrowsers.length > 0 ? (
-                  topBrowsers.map(({ browser, count }, index) => {
-                    const percentage = browserTotal > 0 ? Math.round((count / browserTotal) * 100) : 0;
-                    const colors = ['chart-1', 'chart-2', 'chart-3', 'chart-4'];
-                    const color = colors[index % colors.length];
-                    return (
-                      <div key={browser} className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className={`w-6 h-6 rounded-full bg-${color} flex items-center justify-center`}>
-                            <div className="w-3 h-3 bg-white rounded-full"></div>
-                          </div>
-                          <span>{browser}</span>
-                        </div>
-                        <span className="font-semibold">{percentage}%</span>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center text-muted-foreground py-8">
-                    No browser data available
                   </div>
                 )}
               </CardContent>

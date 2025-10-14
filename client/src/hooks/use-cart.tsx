@@ -34,17 +34,31 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const addToCartMutation = useMutation({
     mutationFn: async (item: { qrCodeId: string; productType: string; quantity: number; size?: string }) => {
-      const response = await apiRequest('POST', '/api/cart', item);
-      return response.json();
+      console.log('useCart: Adding to cart mutation', item);
+      try {
+        const response = await apiRequest('POST', '/api/cart', item);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to add to cart');
+        }
+        const data = await response.json();
+        console.log('useCart: Successfully added to cart', data);
+        return data;
+      } catch (error: any) {
+        console.error('useCart: Add to cart error', error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cart/count'] });
       toast({
         title: "Added to Cart",
         description: "Item has been added to your cart",
       });
     },
     onError: (error: any) => {
+      console.error('useCart: onError called', error);
       toast({
         title: "Error",
         description: error.message || "Failed to add item to cart",
@@ -114,12 +128,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const getCartTotal = () => {
     return cartItems.reduce((total, item) => {
-      let basePrice = 0;
-      if (item.productType === 'sticker') {
-        basePrice = item.size === 'small' ? 0.5 : item.size === 'medium' ? 1.0 : 1.5;
-      } else if (item.productType === 'yard_sign') {
-        basePrice = 12.99;
-      }
+      const basePrice = item.size === 'small' ? 0.5 : item.size === 'medium' ? 1.0 : 1.5;
       return total + (basePrice * item.quantity);
     }, 0);
   };

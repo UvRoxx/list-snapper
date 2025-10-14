@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { QrCodeCard } from "@/components/qr-code-card";
 import { useAuth } from "@/hooks/use-auth";
 import { 
@@ -17,7 +19,8 @@ import {
   CheckCircle, 
   Crown, 
   Grid, 
-  List 
+  List,
+  AlertTriangle
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -26,9 +29,15 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   
   const { data: qrCodes = [], isLoading } = useQuery<any[]>({
     queryKey: ['/api/qr-codes'],
+    enabled: !!user
+  });
+
+  const { data: planLimits, isLoading: isPlanLimitsLoading } = useQuery<any>({
+    queryKey: ['/api/plan-limits'],
     enabled: !!user
   });
 
@@ -93,7 +102,11 @@ export default function Dashboard() {
               <p className="text-muted-foreground">{t('manage_track_qr')}</p>
             </div>
             <Link href="/create">
-              <Button className="mt-4 md:mt-0" data-testid="button-create-qr">
+              <Button 
+                className="mt-4 md:mt-0" 
+                data-testid="button-create-qr"
+                disabled={!planLimits?.canCreateMore}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 {t('create_qr_code')}
               </Button>
@@ -103,6 +116,37 @@ export default function Dashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Plan Limit Warning */}
+        {planLimits && !planLimits.canCreateMore && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>QR Code Limit Reached</AlertTitle>
+            <AlertDescription>
+              You've reached your {planLimits.displayName} plan limit of {planLimits.maxQrCodes} QR codes.{' '}
+              <Link href="/pricing">
+                <span className="underline cursor-pointer font-semibold">Upgrade your plan</span>
+              </Link>{' '}
+              to create more QR codes.
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {/* Approaching Limit Warning */}
+        {planLimits && planLimits.canCreateMore && planLimits.maxQrCodes !== null && 
+         planLimits.currentQrCodes >= planLimits.maxQrCodes * 0.8 && (
+          <Alert className="mb-6 border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
+            <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500" />
+            <AlertTitle className="text-yellow-600 dark:text-yellow-500">Approaching Limit</AlertTitle>
+            <AlertDescription className="text-yellow-700 dark:text-yellow-400">
+              You're using {planLimits.currentQrCodes} of {planLimits.maxQrCodes} QR codes on your {planLimits.displayName} plan.{' '}
+              <Link href="/pricing">
+                <span className="underline cursor-pointer font-semibold">Upgrade now</span>
+              </Link>{' '}
+              to get more.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Stats Cards */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
           <Card data-testid="stat-total-codes">
@@ -128,7 +172,7 @@ export default function Dashboard() {
                 {qrCodes.reduce((acc: number, qr: any) => acc + (qr.scanCount || 0), 0)}
               </div>
               <div className="text-sm text-muted-foreground mt-1">
-                <span className="text-primary">+12%</span> {t('vs_last_month')}
+                Across all QR codes
               </div>
             </CardContent>
           </Card>
@@ -154,8 +198,17 @@ export default function Dashboard() {
                 <span className="text-muted-foreground text-sm">{t('plan_limit')}</span>
                 <Crown className="h-5 w-5 text-primary" />
               </div>
-              <div className="text-3xl font-bold">{qrCodes.length}/5</div>
-              <div className="text-sm text-muted-foreground mt-1">{t('free_plan')}</div>
+              <div className="text-3xl font-bold">
+                {planLimits?.currentQrCodes || 0}/{planLimits?.maxQrCodes === null ? '∞' : planLimits?.maxQrCodes || 5}
+              </div>
+              <div className="text-sm text-muted-foreground mt-1">
+                {planLimits?.displayName || 'Free'} {t('plan_limit').toLowerCase()}
+              </div>
+              {planLimits?.stickerCredits > 0 && (
+                <div className="text-sm text-primary mt-2 font-semibold">
+                  🎟️ {planLimits.stickerCredits} free stickers
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -165,16 +218,25 @@ export default function Dashboard() {
           <CardContent className="p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div className="flex-1 max-w-md">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input 
-                    placeholder={t('search_qr_codes')}
-                    className="pl-10"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    data-testid="input-search-qr"
-                  />
-                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                        <Input 
+                          placeholder={t('search_qr_codes')}
+                          className="pl-10"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          data-testid="input-search-qr"
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Search by name, short code, or destination URL</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
               <div className="flex items-center space-x-3">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -198,10 +260,20 @@ export default function Dashboard() {
                   </SelectContent>
                 </Select>
                 <div className="flex border border-border rounded-lg">
-                  <Button variant="ghost" size="sm" data-testid="button-grid-view">
+                  <Button 
+                    variant={viewMode === "grid" ? "secondary" : "ghost"} 
+                    size="sm" 
+                    onClick={() => setViewMode("grid")}
+                    data-testid="button-grid-view"
+                  >
                     <Grid className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="sm" data-testid="button-list-view">
+                  <Button 
+                    variant={viewMode === "list" ? "secondary" : "ghost"} 
+                    size="sm" 
+                    onClick={() => setViewMode("list")}
+                    data-testid="button-list-view"
+                  >
                     <List className="h-4 w-4" />
                   </Button>
                 </div>
@@ -246,10 +318,50 @@ export default function Dashboard() {
               </Button>
             </CardContent>
           </Card>
-        ) : (
+        ) : viewMode === "grid" ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6" data-testid="grid-qr-codes">
             {filteredAndSortedQrCodes.map((qrCode: any) => (
               <QrCodeCard key={qrCode.id} qrCode={qrCode} />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-4" data-testid="list-qr-codes">
+            {filteredAndSortedQrCodes.map((qrCode: any) => (
+              <Card key={qrCode.id}>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="w-16 h-16 bg-muted rounded flex items-center justify-center flex-shrink-0">
+                        <QrCode className="h-8 w-8" />
+                      </div>
+                      <div className="flex-1 min-w-0 grid grid-cols-3 gap-4">
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-1">Name</div>
+                          <h3 className="font-semibold text-lg">{qrCode.name}</h3>
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-1">Destination</div>
+                          <p className="text-sm truncate">{qrCode.destinationUrl}</p>
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-1">Stats</div>
+                          <div className="flex items-center gap-3 text-sm">
+                            <span>{qrCode.scanCount || 0} scans</span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs ${qrCode.isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'}`}>
+                              {qrCode.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Link href={`/qr/${qrCode.id}`}>
+                        <Button variant="outline" size="sm">View Details</Button>
+                      </Link>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}

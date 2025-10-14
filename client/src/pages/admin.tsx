@@ -449,7 +449,7 @@ export default function AdminDashboard() {
                       <div>
                         <p className="font-medium text-sm">{order.userEmail}</p>
                         <p className="text-xs text-muted-foreground">
-                          {order.quantity}x {order.productType === 'sticker' ? 'Sticker' : 'Yard Sign'}
+                          {order.quantity}x Sticker
                         </p>
                       </div>
                       <div className="text-right">
@@ -684,6 +684,48 @@ export default function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="orders" className="space-y-4">
+            {/* Fulfillment Export Card */}
+            <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-lg mb-1">📦 Manual Fulfillment</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Export pending orders for manual printing ({pendingOrders} orders ready)
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      const pending = orders.filter(o => o.status === 'pending' || o.status === 'processing');
+                      const csv = [
+                        ['Order ID', 'Customer Email', 'QR Code Name', 'Product', 'Quantity', 'Size', 'Shipping Address', 'Date'].join(','),
+                        ...pending.map(o => [
+                          `"${o.id.slice(0, 8)}"`,
+                          `"${o.userEmail}"`,
+                          `"${o.qrCodeName}"`,
+                          '"Sticker"',
+                          o.quantity,
+                          `"${(o as any).size || 'N/A'}"`,
+                          `"${(o as any).shippingAddress || 'N/A'}"`,
+                          `"${new Date(o.createdAt).toLocaleDateString()}"`
+                        ].join(','))
+                      ].join('\n');
+                      const blob = new Blob([csv], { type: 'text/csv' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `fulfillment-list-${new Date().toISOString().split('T')[0]}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    📄 Export Fulfillment List (CSV)
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -755,7 +797,7 @@ export default function AdminDashboard() {
                               <div className="flex items-center gap-2">
                                 <Package className="h-4 w-4 text-muted-foreground" />
                                 <span>
-                                  {order.quantity}x {order.productType === 'sticker' ? 'Sticker' : 'Yard Sign'}
+                                  {order.quantity}x Sticker
                                 </span>
                               </div>
                             </TableCell>

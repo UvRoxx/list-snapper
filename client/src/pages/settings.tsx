@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
 import { Navigation } from "@/components/navigation";
 import { ProtectedRoute } from "@/components/protected-route";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import {
 } from "lucide-react";
 
 export default function Settings() {
+  const { t } = useTranslation('common');
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -55,15 +57,22 @@ export default function Settings() {
     queryKey: ['/api/billing/subscription'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/billing/subscription');
-      return response as { subscription: any };
+      const data = await response.json();
+      return data as { subscription: any };
     }
+  });
+
+  // Also fetch plan limits for accurate tier information
+  const { data: planLimits } = useQuery<any>({
+    queryKey: ['/api/plan-limits']
   });
 
   const { data: invoicesData } = useQuery({
     queryKey: ['/api/billing/invoices'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/billing/invoices');
-      return response as { invoices: any[] };
+      const data = await response.json();
+      return data as { invoices: any[] };
     }
   });
 
@@ -73,9 +82,10 @@ export default function Settings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/billing/subscription'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/plan-limits'] });
       toast({
-        title: "Subscription Canceled",
-        description: "Your subscription will remain active until the end of your billing period."
+        title: t("subscription_canceled"),
+        description: t("subscription_canceled_desc")
       });
     },
     onError: (error: Error) => {
@@ -93,9 +103,10 @@ export default function Settings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/billing/subscription'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/plan-limits'] });
       toast({
-        title: "Subscription Reactivated",
-        description: "Your subscription will continue automatically."
+        title: t("subscription_reactivated"),
+        description: t("subscription_reactivated_desc")
       });
     },
     onError: (error: Error) => {
@@ -115,14 +126,14 @@ export default function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       toast({
-        title: "Success",
-        description: "Profile updated successfully!"
+        title: t("success"),
+        description: t("profile_updated")
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error.message || "Failed to update profile",
+        title: t("error"),
+        description: error.message || t("failed_update_profile"),
         variant: "destructive"
       });
     }
@@ -186,10 +197,10 @@ export default function Settings() {
   };
 
   const navItems = [
-    { id: "profile", label: "Profile", icon: User },
-    { id: "subscription", label: "Subscription", icon: CreditCard },
-    { id: "security", label: "Security", icon: Lock },
-    { id: "notifications", label: "Notifications", icon: Bell },
+    { id: "profile", label: t("profile"), icon: User },
+    { id: "subscription", label: t("subscription"), icon: CreditCard },
+    { id: "security", label: t("security"), icon: Lock },
+    { id: "notifications", label: t("notifications"), icon: Bell },
   ];
 
   return (
@@ -293,7 +304,7 @@ export default function Settings() {
                       disabled={updateProfileMutation.isPending}
                       data-testid="button-save-profile"
                     >
-                      {updateProfileMutation.isPending ? "Saving..." : "Save Changes"}
+                      {updateProfileMutation.isPending ? t("saving") : t("save_changes")}
                     </Button>
                   </CardContent>
                 </Card>
@@ -304,22 +315,22 @@ export default function Settings() {
                   {/* Current Subscription */}
                   <Card data-testid="card-subscription-settings">
                     <CardHeader>
-                      <CardTitle>Current Subscription</CardTitle>
-                      <CardDescription>Manage your subscription and billing</CardDescription>
+                      <CardTitle>{t("current_subscription")}</CardTitle>
+                      <CardDescription>{t("manage_subscription_billing")}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
                       <div className="bg-gradient-card rounded-lg p-6">
                         <div className="flex items-center justify-between mb-4">
                           <div>
                             <div className="text-2xl font-bold mb-1">
-                              {subscriptionData?.subscription?.tierName || 'FREE'} Plan
+                              {planLimits?.displayName || subscriptionData?.subscription?.tierName || 'Free'} {t("plan")}
                             </div>
                             <Badge className={
-                              subscriptionData?.subscription?.status === 'active' 
+                              (planLimits?.tierName === 'STANDARD' || planLimits?.tierName === 'PRO') || subscriptionData?.subscription?.status === 'active' 
                                 ? 'bg-green-500/10 text-green-500' 
                                 : 'bg-primary/10 text-primary'
                             }>
-                              {subscriptionData?.subscription?.status?.toUpperCase() || 'FREE'}
+                              {planLimits?.tierName || subscriptionData?.subscription?.status?.toUpperCase() || 'FREE'}
                             </Badge>
                           </div>
                           <Crown className="h-12 w-12 text-primary" />
@@ -370,16 +381,39 @@ export default function Settings() {
                                 disabled={reactivateSubscriptionMutation.isPending}
                                 className="flex-1"
                               >
-                                Reactivate Subscription
+                                {t("reactivate_subscription")}
                               </Button>
                             ) : (
-                              <Button 
-                                variant="destructive"
-                                onClick={() => cancelSubscriptionMutation.mutate()}
-                                disabled={cancelSubscriptionMutation.isPending}
-                              >
-                                Cancel Subscription
-                              </Button>
+                              <>
+                                <Button 
+                                  variant="destructive"
+                                  onClick={() => cancelSubscriptionMutation.mutate()}
+                                  disabled={cancelSubscriptionMutation.isPending}
+                                >
+                                  {t("cancel_subscription")}
+                                </Button>
+                                {planLimits?.tierName === 'STANDARD' && (
+                                  <Button 
+                                    onClick={async () => {
+                                      const response = await apiRequest('POST', '/api/subscriptions/upgrade', {
+                                        newTierName: 'PRO'
+                                      });
+                                      const data = await response.json();
+                                      if (data.success) {
+                                        queryClient.invalidateQueries({ queryKey: ['/api/plan-limits'] });
+                                        queryClient.invalidateQueries({ queryKey: ['/api/billing/subscription'] });
+                                        toast({
+                                          title: "Upgraded to PRO!",
+                                          description: `You now have ${data.credits} free sticker credits!`
+                                        });
+                                      }
+                                    }}
+                                    className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                                  >
+                                    Upgrade to PRO
+                                  </Button>
+                                )}
+                              </>
                             )}
                             <Link href="/pricing" className="flex-1">
                               <Button variant="outline" className="w-full">
@@ -401,8 +435,8 @@ export default function Settings() {
                   {/* Invoices */}
                   <Card>
                     <CardHeader>
-                      <CardTitle>Billing History</CardTitle>
-                      <CardDescription>Download your past invoices</CardDescription>
+                      <CardTitle>{t("billing_history")}</CardTitle>
+                      <CardDescription>{t("view_payment_history")}</CardDescription>
                     </CardHeader>
                     <CardContent>
                       {invoicesData?.invoices && invoicesData.invoices.length > 0 ? (
@@ -412,7 +446,7 @@ export default function Settings() {
                               <div className="flex items-center gap-3">
                                 <FileText className="h-5 w-5 text-muted-foreground" />
                                 <div>
-                                  <p className="font-medium">Invoice #{invoice.number}</p>
+                                  <p className="font-medium">{t("invoice")} #{invoice.number}</p>
                                   <p className="text-sm text-muted-foreground">
                                     {new Date(invoice.created * 1000).toLocaleDateString()}
                                   </p>
@@ -453,14 +487,15 @@ export default function Settings() {
               {activeTab === "security" && (
                 <Card data-testid="card-security-settings">
                   <CardHeader>
-                    <CardTitle>Security Settings</CardTitle>
+                    <CardTitle>{t("security_settings")}</CardTitle>
+                    <CardDescription>{t("manage_password_security")}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div>
-                      <h3 className="text-lg font-semibold mb-4">Change Password</h3>
+                      <h3 className="text-lg font-semibold mb-4">{t("change_password")}</h3>
                       <div className="space-y-4">
                         <div>
-                          <Label htmlFor="currentPassword">Current Password</Label>
+                          <Label htmlFor="currentPassword">{t("current_password")}</Label>
                           <Input
                             id="currentPassword"
                             type="password"
@@ -470,7 +505,7 @@ export default function Settings() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="newPassword">New Password</Label>
+                          <Label htmlFor="newPassword">{t("new_password")}</Label>
                           <Input
                             id="newPassword"
                             type="password"
@@ -481,7 +516,7 @@ export default function Settings() {
                           <p className="text-xs text-muted-foreground mt-1">At least 8 characters</p>
                         </div>
                         <div>
-                          <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                          <Label htmlFor="confirmPassword">{t("confirm_password")}</Label>
                           <Input
                             id="confirmPassword"
                             type="password"
@@ -506,17 +541,18 @@ export default function Settings() {
               {activeTab === "notifications" && (
                 <Card data-testid="card-notification-settings">
                   <CardHeader>
-                    <CardTitle>Notification Preferences</CardTitle>
+                    <CardTitle>{t("notification_preferences")}</CardTitle>
+                    <CardDescription>{t("manage_email_notifications")}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-6">
                       <div>
-                        <h3 className="text-lg font-semibold mb-4">Email Notifications</h3>
+                        <h3 className="text-lg font-semibold mb-4">{t("email_notifications")}</h3>
                         <div className="space-y-4">
                           <div className="flex items-center justify-between py-2">
                             <div className="flex-1">
-                              <div className="font-medium">QR Code Scans</div>
-                              <div className="text-sm text-muted-foreground">Get notified when your QR codes are scanned</div>
+                              <div className="font-medium">{t("scan_alerts")}</div>
+                              <div className="text-sm text-muted-foreground">{t("scan_alerts_desc")}</div>
                             </div>
                             <Switch 
                               checked={notifications.scanAlerts}
@@ -526,8 +562,8 @@ export default function Settings() {
                           </div>
                           <div className="flex items-center justify-between py-2">
                             <div className="flex-1">
-                              <div className="font-medium">Weekly Reports</div>
-                              <div className="text-sm text-muted-foreground">Receive weekly analytics summaries</div>
+                              <div className="font-medium">{t("weekly_reports")}</div>
+                              <div className="text-sm text-muted-foreground">{t("weekly_reports_desc")}</div>
                             </div>
                             <Switch 
                               checked={notifications.weeklyReports}
@@ -537,8 +573,8 @@ export default function Settings() {
                           </div>
                           <div className="flex items-center justify-between py-2">
                             <div className="flex-1">
-                              <div className="font-medium">Marketing Updates</div>
-                              <div className="text-sm text-muted-foreground">Product updates and tips</div>
+                              <div className="font-medium">{t("marketing_emails")}</div>
+                              <div className="text-sm text-muted-foreground">{t("marketing_emails_desc")}</div>
                             </div>
                             <Switch 
                               checked={notifications.marketing}

@@ -30,6 +30,7 @@ export interface IStorage {
 
   // QR Code methods
   getUserQrCodes(userId: string): Promise<QrCode[]>;
+  getUserQrCodeCount(userId: string): Promise<number>;
   getQrCode(id: string): Promise<QrCode | undefined>;
   getQrCodeByShortCode(shortCode: string): Promise<QrCode | undefined>;
   createQrCode(qrCode: InsertQrCode & { userId: string; shortCode: string }): Promise<QrCode>;
@@ -52,6 +53,9 @@ export interface IStorage {
   getUserMembership(userId: string): Promise<UserMembership | undefined>;
   createUserMembership(membership: Omit<UserMembership, 'id' | 'createdAt'>): Promise<UserMembership>;
   updateUserMembership(userId: string, updates: Partial<UserMembership>): Promise<UserMembership>;
+  getStickerCredits(userId: string): Promise<number>;
+  useStickerCredits(userId: string, amount: number): Promise<void>;
+  addStickerCredits(userId: string, amount: number): Promise<void>;
 
   // Order methods
   getUserOrders(userId: string): Promise<Order[]>;
@@ -113,6 +117,14 @@ export class DatabaseStorage implements IStorage {
       .from(qrCodes)
       .where(eq(qrCodes.userId, userId))
       .orderBy(desc(qrCodes.createdAt));
+  }
+
+  async getUserQrCodeCount(userId: string): Promise<number> {
+    const [result] = await db
+      .select({ count: count() })
+      .from(qrCodes)
+      .where(eq(qrCodes.userId, userId));
+    return result.count;
   }
 
   async getQrCode(id: string): Promise<QrCode | undefined> {
@@ -377,6 +389,37 @@ export class DatabaseStorage implements IStorage {
     return membership;
   }
 
+  async getStickerCredits(userId: string): Promise<number> {
+    const membership = await this.getUserMembership(userId);
+    return membership?.stickerCredits || 0;
+  }
+
+  async useStickerCredits(userId: string, amount: number): Promise<void> {
+    const membership = await this.getUserMembership(userId);
+    if (!membership) throw new Error('No membership found');
+    
+    const newCredits = (membership.stickerCredits || 0) - amount;
+    if (newCredits < 0) throw new Error('Insufficient credits');
+    
+    await db
+      .update(userMemberships)
+      .set({ stickerCredits: newCredits })
+      .where(eq(userMemberships.userId, userId));
+  }
+
+  async addStickerCredits(userId: string, amount: number): Promise<void> {
+    const membership = await this.getUserMembership(userId);
+    if (!membership) throw new Error('No membership found');
+    
+    await db
+      .update(userMemberships)
+      .set({ 
+        stickerCredits: (membership.stickerCredits || 0) + amount,
+        creditsResetAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
+      })
+      .where(eq(userMemberships.userId, userId));
+  }
+
   async getUserOrders(userId: string): Promise<Order[]> {
     return await db
       .select()
@@ -423,6 +466,7 @@ export class DatabaseStorage implements IStorage {
         isAdmin: users.isAdmin,
         stripeCustomerId: users.stripeCustomerId,
         stripeSubscriptionId: users.stripeSubscriptionId,
+        savedAddress: users.savedAddress,
         createdAt: users.createdAt,
         updatedAt: users.updatedAt,
         membershipTier: userMemberships.tierName,
@@ -434,7 +478,7 @@ export class DatabaseStorage implements IStorage {
       ))
       .orderBy(desc(users.createdAt));
     
-    return result;
+    return result as any;
   }
 
   async getAllQrCodes(): Promise<(QrCode & { userEmail?: string })[]> {
@@ -458,7 +502,7 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(users, eq(qrCodes.userId, users.id))
       .orderBy(desc(qrCodes.createdAt));
     
-    return result;
+    return result as any;
   }
 
   async getAllOrders(): Promise<(Order & { userEmail?: string; qrCodeName?: string })[]> {
@@ -485,7 +529,7 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(qrCodes, eq(orders.qrCodeId, qrCodes.id))
       .orderBy(desc(orders.createdAt));
     
-    return result;
+    return result as any;
   }
 
   async getPlatformStats(): Promise<{

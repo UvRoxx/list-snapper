@@ -47,16 +47,21 @@ function CheckoutForm({
     e.preventDefault();
 
     if (!stripe || !elements) {
+      console.error('Stripe or Elements not loaded');
       return;
     }
 
     setIsProcessing(true);
+    console.log('Starting payment process...');
 
     try {
       const { error: submitError } = await elements.submit();
       if (submitError) {
+        console.error('Elements submit error:', submitError);
         throw new Error(submitError.message);
       }
+
+      console.log('Elements submitted successfully');
 
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
@@ -64,33 +69,43 @@ function CheckoutForm({
       });
 
       if (error) {
+        console.error('Payment confirmation error:', error);
         throw new Error(error.message);
       }
 
+      console.log('Payment confirmed:', paymentIntent?.status);
+
       if (paymentIntent && paymentIntent.status === "succeeded") {
+        console.log('Creating orders for', cartItems.length, 'items');
+        
         // Create orders for all cart items
-        const orderPromises = cartItems.map((item) =>
-          apiRequest('POST', '/api/orders', {
+        const orderPromises = cartItems.map((item) => {
+          const itemPrice = item.size === 'small' ? 0.5 : item.size === 'medium' ? 1.0 : 1.5;
+          return apiRequest('POST', '/api/orders', {
             qrCodeId: item.qrCodeId,
             productType: item.productType,
             quantity: item.quantity,
             size: item.size,
-            total: (item.productType === 'sticker' 
-              ? (item.size === 'small' ? 0.5 : item.size === 'medium' ? 1.0 : 1.5) 
-              : 12.99) * item.quantity,
+            total: (itemPrice * item.quantity).toFixed(2),
             shippingAddress: JSON.stringify(shippingAddress),
             stripePaymentIntentId: paymentIntent.id,
-          }).then(res => res.json())
-        );
+          }).then(res => {
+            if (!res.ok) throw new Error('Failed to create order');
+            return res.json();
+          });
+        });
 
         await Promise.all(orderPromises);
+        console.log('All orders created successfully');
         
         // Clear cart after successful orders
         await clearCart();
+        console.log('Cart cleared');
         
         onSuccess();
       }
     } catch (error: any) {
+      console.error('Payment flow error:', error);
       toast({
         title: "Payment Failed",
         description: error.message || "Failed to process payment",
@@ -131,7 +146,7 @@ export default function CheckoutCart() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
-  const { cartItems, getCartTotal } = useCart();
+  const { cartItems, getCartTotal, isLoading: isCartLoading } = useCart();
   const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
     fullName: "",
     address: "",
@@ -147,12 +162,14 @@ export default function CheckoutCart() {
 
   const total = getCartTotal();
 
-  // Redirect if cart is empty
+  // Redirect if cart is empty (but wait for cart to load first!)
   useEffect(() => {
-    if (cartItems.length === 0 && !orderComplete) {
+    console.log('Checkout-cart: cartItems length =', cartItems.length, 'isCartLoading =', isCartLoading, 'orderComplete =', orderComplete);
+    if (!isCartLoading && cartItems.length === 0 && !orderComplete) {
+      console.log('Cart is empty after loading, redirecting to /cart');
       setLocation('/cart');
     }
-  }, [cartItems.length, orderComplete, setLocation]);
+  }, [cartItems.length, isCartLoading, orderComplete, setLocation]);
 
   const handleContinueToPayment = async () => {
     if (!shippingAddress.fullName || !shippingAddress.address || !shippingAddress.city || 
@@ -168,19 +185,29 @@ export default function CheckoutCart() {
     setIsLoading(true);
 
     try {
+      console.log('Creating payment intent for amount:', total.toFixed(2));
       const response = await apiRequest('POST', '/api/create-payment-intent', {
         amount: total.toFixed(2),
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create payment intent');
+      }
+      
       const data = await response.json();
+      console.log('Payment intent created, client secret received');
       setClientSecret(data.clientSecret);
 
       if (saveAddress && user) {
-        // Save address to user profile
-        await apiRequest('PUT', '/api/auth/profile', {
-          savedAddress: JSON.stringify(shippingAddress),
+        console.log('Saving address to profile...');
+        // Save address to user profile - use correct endpoint
+        await apiRequest('POST', '/api/users/save-address', {
+          address: JSON.stringify(shippingAddress),
         });
       }
     } catch (error: any) {
+      console.error('Payment initialization error:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to initialize payment",
@@ -247,8 +274,10 @@ export default function CheckoutCart() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <GoogleAddressInput
-                      onAddressSelect={(address) => setShippingAddress(address)}
+                      onAddressSelect={(address) => setShippingAddress(address as ShippingAddress)}
                       initialAddress={shippingAddress}
+                      showProfilePrefill={true}
+                      savedAddress={user?.savedAddress}
                     />
                     <div className="flex items-center space-x-2">
                       <Checkbox
@@ -311,15 +340,13 @@ export default function CheckoutCart() {
                 <CardContent className="space-y-4">
                   <div className="space-y-3">
                     {cartItems.map((item) => {
-                      const itemPrice = item.productType === 'sticker'
-                        ? (item.size === 'small' ? 0.5 : item.size === 'medium' ? 1.0 : 1.5)
-                        : 12.99;
+                      const itemPrice = item.size === 'small' ? 0.5 : item.size === 'medium' ? 1.0 : 1.5;
                       return (
                         <div key={item.id} className="flex justify-between text-sm">
                           <div className="flex-1">
                             <div className="font-medium">{item.qrCode.name}</div>
                             <div className="text-xs text-muted-foreground">
-                              {item.productType === 'sticker' ? `Sticker (${item.size})` : 'Yard Sign'} × {item.quantity}
+                              Sticker ({item.size}) × {item.quantity}
                             </div>
                           </div>
                           <div className="font-medium">

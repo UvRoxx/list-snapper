@@ -86,6 +86,10 @@ export default function Pricing() {
                   </div>
                   <div className="flex items-start space-x-3">
                     <Check className="h-5 w-5 text-primary mt-0.5" />
+                    <span className="text-sm font-semibold">25 free stickers/month</span>
+                  </div>
+                  <div className="flex items-start space-x-3">
+                    <Check className="h-5 w-5 text-primary mt-0.5" />
                     <span className="text-sm">Full analytics dashboard</span>
                   </div>
                   <div className="flex items-start space-x-3">
@@ -127,6 +131,10 @@ export default function Pricing() {
                   </div>
                   <div className="flex items-start space-x-3">
                     <Check className="h-5 w-5 text-primary mt-0.5" />
+                    <span className="text-sm font-semibold">100 free stickers/month</span>
+                  </div>
+                  <div className="flex items-start space-x-3">
+                    <Check className="h-5 w-5 text-primary mt-0.5" />
                     <span className="text-sm">Advanced analytics</span>
                   </div>
                   <div className="flex items-start space-x-3">
@@ -146,9 +154,92 @@ export default function Pricing() {
             </Card>
           </div>
 
-          {/* Feature Comparison Table */}
+          {/* Analytics Features Table */}
           <div className="mt-20 max-w-6xl mx-auto">
-            <h3 className="text-2xl font-bold mb-8 text-center">Feature Comparison</h3>
+            <h2 className="text-3xl font-bold mb-4 text-center">Analytics & Features Breakdown</h2>
+            <p className="text-center text-muted-foreground mb-12">See exactly what's included in each plan</p>
+            
+            <Card className="mb-12">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-6 py-4 text-left font-semibold">Analytics Feature</th>
+                      <th className="px-6 py-4 text-center font-semibold">FREE</th>
+                      <th className="px-6 py-4 text-center font-semibold">STANDARD</th>
+                      <th className="px-6 py-4 text-center font-semibold">PRO</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    <tr>
+                      <td className="px-6 py-4">Basic Scan Count</td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                    </tr>
+                    <tr className="bg-muted/20">
+                      <td className="px-6 py-4 font-semibold">Total Scans & Unique Visitors</td>
+                      <td className="px-6 py-4 text-center"><X className="h-5 w-5 text-gray-300 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                    </tr>
+                    <tr>
+                      <td className="px-6 py-4 font-semibold">Location Analytics (Country Breakdown)</td>
+                      <td className="px-6 py-4 text-center"><X className="h-5 w-5 text-gray-300 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                    </tr>
+                    <tr className="bg-muted/20">
+                      <td className="px-6 py-4 font-semibold">Operating System Distribution</td>
+                      <td className="px-6 py-4 text-center"><X className="h-5 w-5 text-gray-300 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                    </tr>
+                    <tr>
+                      <td className="px-6 py-4 font-semibold">Time Series Charts (Daily/Weekly/Monthly)</td>
+                      <td className="px-6 py-4 text-center"><X className="h-5 w-5 text-gray-300 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                    </tr>
+                    <tr className="bg-muted/20">
+                      <td className="px-6 py-4 font-semibold">Peak Hour Analysis</td>
+                      <td className="px-6 py-4 text-center"><X className="h-5 w-5 text-gray-300 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                    </tr>
+                    <tr>
+                      <td className="px-6 py-4 font-semibold">Average Daily Scans</td>
+                      <td className="px-6 py-4 text-center"><X className="h-5 w-5 text-gray-300 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                    </tr>
+                    <tr className="bg-muted/20">
+                      <td className="px-6 py-4 font-semibold">Export Analytics Data (CSV)</td>
+                      <td className="px-6 py-4 text-center"><X className="h-5 w-5 text-gray-300 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                    </tr>
+                    <tr>
+                      <td className="px-6 py-4 font-semibold">API Access to Analytics</td>
+                      <td className="px-6 py-4 text-center"><X className="h-5 w-5 text-gray-300 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><X className="h-5 w-5 text-gray-300 mx-auto" /></td>
+                      <td className="px-6 py-4 text-center"><Check className="h-5 w-5 text-green-600 mx-auto" /></td>
+                    </tr>
+                    <tr className="bg-muted/20">
+                      <td className="px-6 py-4 font-semibold">Free Stickers Monthly</td>
+                      <td className="px-6 py-4 text-center">0</td>
+                      <td className="px-6 py-4 text-center font-semibold text-green-600">25</td>
+                      <td className="px-6 py-4 text-center font-semibold text-green-600">100</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+
+          {/* Feature Comparison Table */}
+          <div className="mt-12 max-w-6xl mx-auto">
+            <h3 className="text-2xl font-bold mb-8 text-center">Complete Feature Comparison</h3>
             <Card>
               <div className="overflow-x-auto">
                 <table className="w-full" data-testid="table-feature-comparison">

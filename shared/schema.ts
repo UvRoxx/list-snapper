@@ -6,7 +6,7 @@ import { z } from "zod";
 
 export const membershipTierEnum = pgEnum('membership_tier', ['FREE', 'STANDARD', 'PRO']);
 export const orderStatusEnum = pgEnum('order_status', ['pending', 'processing', 'shipped', 'delivered', 'cancelled']);
-export const productTypeEnum = pgEnum('product_type', ['sticker', 'yard_sign']);
+export const productTypeEnum = pgEnum('product_type', ['sticker']);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -41,6 +41,8 @@ export const userMemberships = pgTable("user_memberships", {
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   tierName: membershipTierEnum("tier_name").notNull(),
   isActive: boolean("is_active").default(true),
+  stickerCredits: integer("sticker_credits").default(0),
+  creditsResetAt: timestamp("credits_reset_at"),
   expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -54,6 +56,7 @@ export const qrCodes = pgTable("qr_codes", {
   isActive: boolean("is_active").default(true),
   customColor: text("custom_color").default("#000000"),
   customBgColor: text("custom_bg_color").default("#FFFFFF"),
+  customText: text("custom_text"),
   logoUrl: text("logo_url"),
   scanCount: integer("scan_count").default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -192,6 +195,7 @@ export const insertQrCodeSchema = createInsertSchema(qrCodes).pick({
   destinationUrl: true,
   customColor: true,
   customBgColor: true,
+  customText: true,
   logoUrl: true,
   isActive: true,
 });

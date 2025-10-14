@@ -57,6 +57,8 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           userId: user.id,
           tierName: 'FREE',
           isActive: true,
+          stickerCredits: 0,
+          creditsResetAt: null,
           expiresAt: null
         });
       }
@@ -100,6 +102,8 @@ if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
           userId: user.id,
           tierName: 'FREE',
           isActive: true,
+          stickerCredits: 0,
+          creditsResetAt: null,
           expiresAt: null
         });
       }
@@ -201,6 +205,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: user.id,
         tierName: 'FREE',
         isActive: true,
+        stickerCredits: 0,
+        creditsResetAt: null,
         expiresAt: null
       });
 
@@ -422,6 +428,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get plan limits and usage
+  app.get("/api/plan-limits", authenticateToken, async (req: any, res) => {
+    try {
+      const userMembership = await storage.getUserMembership(req.user.userId);
+      const tiers = await storage.getMembershipTiers();
+      
+      // Default to FREE tier if no membership found
+      const tierName = userMembership?.tierName || 'FREE';
+      const tier = tiers.find(t => t.name === tierName);
+      
+      if (!tier) {
+        return res.status(500).json({ message: "Unable to determine plan tier" });
+      }
+      
+      const qrCodeCount = await storage.getUserQrCodeCount(req.user.userId);
+      const stickerCredits = await storage.getStickerCredits(req.user.userId);
+      
+      res.json({
+        tierName: tier.name,
+        displayName: tier.displayName,
+        maxQrCodes: tier.maxQrCodes, // null means unlimited
+        currentQrCodes: qrCodeCount,
+        canCreateMore: tier.maxQrCodes === null || qrCodeCount < tier.maxQrCodes,
+        stickerCredits: stickerCredits,
+        hasAnalytics: tier.hasAnalytics,
+        hasCustomBranding: tier.hasCustomBranding,
+        hasApiAccess: tier.hasApiAccess,
+        hasWhiteLabel: tier.hasWhiteLabel
+      });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   app.get("/api/qr-codes/:id", authenticateToken, async (req: any, res) => {
     try {
       const { id } = req.params;
@@ -445,6 +485,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/qr-codes", authenticateToken, async (req: any, res) => {
     try {
       const qrCodeData = insertQrCodeSchema.parse(req.body);
+      
+      // Check user's plan limits before creating
+      const userMembership = await storage.getUserMembership(req.user.userId);
+      const tiers = await storage.getMembershipTiers();
+      
+      // Default to FREE tier if no membership found
+      const tierName = userMembership?.tierName || 'FREE';
+      const tier = tiers.find(t => t.name === tierName);
+      
+      if (!tier) {
+        return res.status(500).json({ message: "Unable to determine plan tier" });
+      }
+      
+      // Check if user has reached their plan limit (use efficient count method)
+      const qrCodeCount = await storage.getUserQrCodeCount(req.user.userId);
+      
+      // If maxQrCodes is null, it means unlimited (PRO plan)
+      if (tier.maxQrCodes !== null && qrCodeCount >= tier.maxQrCodes) {
+        return res.status(403).json({ 
+          message: `You've reached your plan limit of ${tier.maxQrCodes} QR codes. Please upgrade to create more.`,
+          limit: tier.maxQrCodes,
+          current: qrCodeCount,
+          tierName: tier.name
+        });
+      }
+      
       const shortCode = await generateShortCode();
       
       const qrCode = await storage.createQrCode({
@@ -543,14 +609,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Public QR redirect endpoint
-  app.get("/r/:shortCode", async (req, res) => {
+  // API endpoint to get redirect info (used by branded redirect page)
+  app.get("/api/redirect-info/:shortCode", async (req, res) => {
     try {
       const { shortCode } = req.params;
       const qrCode = await storage.getQrCodeByShortCode(shortCode);
       
       if (!qrCode || !qrCode.isActive) {
-        return res.status(404).send("QR code not found or inactive");
+        return res.status(404).json({ message: "QR code not found or inactive" });
       }
 
       // Track the scan
@@ -569,10 +635,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Increment scan count
       await storage.incrementQrCodeScans(qrCode.id);
 
-      // Redirect to destination
-      res.redirect(qrCode.destinationUrl);
+      // Return QR code info for branded redirect page
+      res.json({
+        name: qrCode.name,
+        destinationUrl: qrCode.destinationUrl,
+        shortCode: qrCode.shortCode
+      });
     } catch (error: any) {
-      res.status(500).send("Internal server error");
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
@@ -610,6 +680,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: user.id,
           tierName: tier.name as any,
           isActive: true,
+          stickerCredits: tier.name === 'STANDARD' ? 25 : tier.name === 'PRO' ? 100 : 0,
+          creditsResetAt: (tier.name === 'STANDARD' || tier.name === 'PRO') ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null,
           expiresAt: null
         });
       }
@@ -674,7 +746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         const successfulSetup = setupIntents.data.find(si => 
           si.status === 'succeeded' && 
-          si.metadata.subscription_id === subscription.id &&
+          si.metadata?.subscription_id === subscription.id &&
           si.payment_method
         );
         
@@ -696,7 +768,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (updatedSub.status === 'incomplete') {
               const latestInvoice = await stripe.invoices.retrieve(updatedSub.latest_invoice as string);
               
-              if (latestInvoice && !latestInvoice.paid) {
+              if (latestInvoice && !(latestInvoice as any).paid) {
                 console.log('Paying first invoice with payment method...');
                 await stripe.invoices.pay(latestInvoice.id, {
                   payment_method: paymentMethodId,
@@ -715,6 +787,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 if (tier) {
                   const existingMembership = await storage.getUserMembership(user.id);
                   
+                  // Grant sticker credits based on tier
+                  const creditsToGrant = tier.name === 'STANDARD' ? 25 : tier.name === 'PRO' ? 100 : 0;
+                  
                   if (existingMembership) {
                     await storage.updateUserMembership(user.id, { tierName: tier.name as any });
                   } else {
@@ -722,11 +797,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
                       userId: user.id,
                       tierName: tier.name as any,
                       isActive: true,
+                      stickerCredits: creditsToGrant,
+                      creditsResetAt: creditsToGrant > 0 ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null,
                       expiresAt: null
                     });
                   }
                   
-                  console.log(`✅ Activated ${tier.name} membership for ${user.email}`);
+                  // Add credits if upgrading
+                  if (creditsToGrant > 0 && existingMembership) {
+                    await storage.addStickerCredits(user.id, creditsToGrant);
+                  }
+                  
+                  console.log(`✅ Activated ${tier.name} membership for ${user.email} with ${creditsToGrant} credits`);
                   
                   return res.json({ 
                     success: true, 
@@ -764,14 +846,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const existingMembership = await storage.getUserMembership(user.id);
           
           if (existingMembership) {
-            await storage.updateUserMembership(user.id, tier.id);
+            await storage.updateUserMembership(user.id, { tierName: tier.name as any });
             console.log(`✅ Updated user ${user.email} membership to ${tier.name}`);
           } else {
+            const creditsToGrant = tier.name === 'STANDARD' ? 25 : tier.name === 'PRO' ? 100 : 0;
             await storage.createUserMembership({
               userId: user.id,
-              tierId: tier.id,
-              status: 'active',
-              currentPeriodEnd: new Date(subscription.current_period_end * 1000)
+              tierName: tier.name as any,
+              isActive: true,
+              stickerCredits: creditsToGrant,
+              creditsResetAt: creditsToGrant > 0 ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null,
+              expiresAt: null
             });
             console.log(`✅ Created user ${user.email} membership for ${tier.name}`);
           }
@@ -903,13 +988,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         invoices: invoices.data.map(inv => ({
           id: inv.id,
           number: inv.number,
-          amount: inv.amount_due / 100,
-          currency: inv.currency.toUpperCase(),
-          status: inv.status,
-          created: inv.created,
-          paid: inv.paid,
-          invoicePdf: inv.invoice_pdf,
-          hostedInvoiceUrl: inv.hosted_invoice_url,
+              amount: inv.amount_due / 100,
+              currency: inv.currency.toUpperCase(),
+              status: inv.status,
+              created: inv.created,
+              paid: (inv as any).paid,
+              invoicePdf: inv.invoice_pdf,
+              hostedInvoiceUrl: inv.hosted_invoice_url,
         }))
       });
     } catch (error: any) {
@@ -931,12 +1016,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const membership = await storage.getUserMembership(user.id);
-      let tierName = 'FREE';
-      if (membership) {
-        const tiers = await storage.getMembershipTiers();
-        const tier = tiers.find(t => t.id === membership.tierId);
-        if (tier) tierName = tier.name;
-      }
+      const tierName = membership?.tierName || 'FREE';
 
       const paymentMethod = subscription.default_payment_method as any;
 
@@ -944,8 +1024,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         subscription: {
           id: subscription.id,
           status: subscription.status,
-          currentPeriodEnd: subscription.current_period_end,
-          cancelAtPeriodEnd: subscription.cancel_at_period_end,
+          currentPeriodEnd: (subscription as any).current_period_end,
+          cancelAtPeriodEnd: (subscription as any).cancel_at_period_end,
           tierName,
           paymentMethod: paymentMethod ? {
             brand: paymentMethod.card?.brand,
@@ -975,8 +1055,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ 
         success: true,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end,
-        currentPeriodEnd: subscription.current_period_end
+        cancelAtPeriodEnd: (subscription as any).cancel_at_period_end,
+        currentPeriodEnd: (subscription as any).current_period_end
       });
     } catch (error: any) {
       console.error('Error canceling subscription:', error);
@@ -998,10 +1078,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ 
         success: true,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end
+        cancelAtPeriodEnd: (subscription as any).cancel_at_period_end
       });
     } catch (error: any) {
       console.error('Error reactivating subscription:', error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // Upgrade subscription tier (Standard → Pro with proration)
+  app.post("/api/subscriptions/upgrade", authenticateToken, async (req: any, res) => {
+    try {
+      const { newTierName } = req.body;
+      const user = await storage.getUser(req.user.userId);
+      
+      if (!user || !user.stripeSubscriptionId) {
+        return res.status(404).json({ message: "No active subscription to upgrade" });
+      }
+
+      const tiers = await storage.getMembershipTiers();
+      const newTier = tiers.find(t => t.name === newTierName);
+      
+      if (!newTier || !newTier.stripePriceId) {
+        return res.status(400).json({ message: "Invalid tier" });
+      }
+
+      // Update Stripe subscription with proration
+      const subscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
+        items: [{
+          id: (await stripe.subscriptions.retrieve(user.stripeSubscriptionId)).items.data[0].id,
+          price: newTier.stripePriceId,
+        }],
+        proration_behavior: 'always_invoice',
+      });
+
+      // Update membership tier
+      await storage.updateUserMembership(user.id, { tierName: newTier.name as any });
+      
+      // Grant sticker credits for new tier
+      const creditsToGrant = newTier.name === 'STANDARD' ? 25 : newTier.name === 'PRO' ? 100 : 0;
+      if (creditsToGrant > 0) {
+        await storage.addStickerCredits(user.id, creditsToGrant);
+      }
+
+      console.log(`✅ Upgraded ${user.email} to ${newTier.name} with ${creditsToGrant} credits`);
+
+      res.json({ 
+        success: true,
+        tier: newTier.name,
+        credits: creditsToGrant
+      });
+    } catch (error: any) {
+      console.error('Error upgrading subscription:', error);
       res.status(400).json({ message: error.message });
     }
   });
@@ -1073,14 +1201,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { productType, size, quantity } = req.body;
       
-      // Simple pricing logic - replace with actual Printify API calls
-      let basePrice = 0;
-      if (productType === 'sticker') {
-        basePrice = size === 'small' ? 0.5 : size === 'medium' ? 1.0 : 1.5;
-      } else if (productType === 'yard_sign') {
-        basePrice = 12.99;
-      }
-
+      // Simple pricing logic for stickers
+      const basePrice = size === 'small' ? 0.5 : size === 'medium' ? 1.0 : 1.5;
       const total = basePrice * quantity;
       res.json({ total: total.toFixed(2) });
     } catch (error: any) {
@@ -1091,8 +1213,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/orders", authenticateToken, async (req: any, res) => {
     try {
       const orderData = insertOrderSchema.extend({
-        stripePaymentIntentId: z.string().optional()
+        stripePaymentIntentId: z.string().optional(),
+        useCredits: z.boolean().optional()
       }).parse(req.body);
+      
+      // Check if using credits
+      if (orderData.useCredits && orderData.productType === 'sticker') {
+        const credits = await storage.getStickerCredits(req.user.userId);
+        const quantity = orderData.quantity;
+        
+        if (credits >= quantity) {
+          // Use credits, skip payment
+          await storage.useStickerCredits(req.user.userId, quantity);
+          console.log(`✅ Used ${quantity} sticker credits for order`);
+        } else {
+          return res.status(400).json({ 
+            message: `Insufficient credits. You have ${credits} but need ${quantity}.` 
+          });
+        }
+      }
       
       const order = await storage.createOrder({
         ...orderData,

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/tooltip";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, Download, MoreVertical, Edit, Trash, BarChart3, Calendar, ExternalLink } from "lucide-react";
+import { Eye, Download, MoreVertical, Edit, Trash, BarChart3, Calendar, ExternalLink, Power } from "lucide-react";
 import QRCode from "qrcode";
 
 interface QrCodeCardProps {
@@ -28,6 +28,8 @@ interface QrCodeCardProps {
     shortCode: string;
     destinationUrl: string;
     isActive: boolean;
+    customColor?: string | null;
+    customBgColor?: string | null;
     scanCount: number;
     createdAt: string;
   };
@@ -39,7 +41,7 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
 
-  // Generate QR code preview
+  // Generate QR code preview with custom colors
   useEffect(() => {
     const generateQRCode = async () => {
       try {
@@ -48,8 +50,8 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
           width: 200,
           margin: 1,
           color: {
-            dark: '#000000',
-            light: '#FFFFFF'
+            dark: qrCode.customColor || '#000000',
+            light: qrCode.customBgColor || '#FFFFFF'
           }
         });
         setQrCodeDataUrl(dataUrl);
@@ -59,7 +61,7 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
     };
     
     generateQRCode();
-  }, [qrCode.shortCode]);
+  }, [qrCode.shortCode, qrCode.customColor, qrCode.customBgColor]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -68,6 +70,7 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/qr-codes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/plan-limits'] });
       toast({
         title: "Success",
         description: "QR code deleted successfully"
@@ -77,6 +80,27 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
       toast({
         title: "Error",
         description: error.message || "Failed to delete QR code",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      const response = await apiRequest('PUT', `/api/qr-codes/${id}`, { isActive });
+      return response.json();
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/qr-codes'] });
+      toast({
+        title: "Success",
+        description: variables.isActive ? "QR code activated" : "QR code deactivated"
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update QR code status",
         variant: "destructive"
       });
     }
@@ -129,9 +153,18 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
             <h3 className="font-semibold text-lg mb-1" data-testid="text-qr-name">
               {qrCode.name}
             </h3>
-            <p className="text-sm text-muted-foreground" data-testid="text-qr-shortcode">
-              listsnap.io/r/{qrCode.shortCode}
-            </p>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <p className="text-sm text-muted-foreground cursor-help" data-testid="text-qr-shortcode">
+                    listsnap.io/r/{qrCode.shortCode}
+                  </p>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Short code: Unique 8-character identifier for this QR code</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           <div className="flex items-center space-x-2">
             <Badge 
@@ -192,6 +225,12 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem 
+                onClick={() => toggleActiveMutation.mutate({ id: qrCode.id, isActive: !qrCode.isActive })}
+              >
+                <Power className="h-4 w-4 mr-2" />
+                {qrCode.isActive ? 'Deactivate' : 'Activate'}
+              </DropdownMenuItem>
               <DropdownMenuItem>
                 <Edit className="h-4 w-4 mr-2" />
                 Edit

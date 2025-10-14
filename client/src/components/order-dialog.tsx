@@ -60,12 +60,6 @@ const products = [
     description: "Weather-resistant vinyl QR stickers",
     icon: Sticker,
   },
-  {
-    type: "yard_sign",
-    name: "Yard Sign",
-    description: "18x24 corrugated plastic sign",
-    icon: SignpostBig,
-  },
 ];
 
 const sizeOptions = [
@@ -309,17 +303,6 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, initialProductType }
       return;
     }
 
-    // Validate yard sign orders are only for USA
-    const isUSA = country === "USA" || country === "United States" || country === "US";
-    if (productType === "yard_sign" && !isUSA) {
-      toast({
-        title: "Invalid Shipping Country",
-        description: "Yard signs can only be shipped to USA addresses. Please change your country to USA or select stickers instead.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     await handleSaveAddress();
 
     try {
@@ -339,15 +322,35 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, initialProductType }
   };
 
   const handleAddToCart = async () => {
-    if (!selectedQrCodeId || !productType) return;
+    if (!selectedQrCodeId || !productType) {
+      console.error('Add to cart failed: missing qrCodeId or productType', {
+        selectedQrCodeId,
+        productType
+      });
+      toast({
+        title: "Error",
+        description: "Please select a QR code and product type",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
+      console.log('Adding to cart:', {
+        qrCodeId: selectedQrCodeId,
+        productType,
+        quantity,
+        size: size || undefined,
+      });
+      
       await addToCart({
         qrCodeId: selectedQrCodeId,
         productType,
         quantity,
-        size: productType === 'sticker' ? size : undefined,
+        size: size || undefined,
       });
+      
+      console.log('Successfully added to cart');
       
       // Reset and close dialog
       onOpenChange(false);
@@ -359,7 +362,12 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, initialProductType }
         setQuantity(10);
       }, 300);
     } catch (error: any) {
-      // Error already handled by useCart hook
+      console.error('Add to cart error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add item to cart",
+        variant: "destructive",
+      });
     }
   };
 
@@ -402,7 +410,7 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, initialProductType }
             {orderComplete
               ? "Thank you for your order!"
               : step === 0 ? "Choose which QR code to print on your physical products"
-              : step === 1 ? "Select stickers or yard signs for your QR code"
+              : step === 1 ? "Select stickers for your QR code"
               : step === 2 ? "Choose size and quantity for your order"
               : step === 3 ? "Enter your shipping address"
               : `Complete your order for ${qrCode?.name || 'your QR code'}`}
@@ -795,27 +803,13 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, initialProductType }
                         </div>
                       </div>
 
-                      {productType === "yard_sign" && shippingAddress.country !== "USA" && shippingAddress.country !== "United States" && shippingAddress.country !== "US" && (
-                        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mt-4">
-                          <p className="text-sm text-amber-900 dark:text-amber-100 flex items-center gap-2">
-                            <svg className="h-4 w-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                            <span>Yard signs are only available for USA addresses. Please select USA or choose stickers instead.</span>
-                          </p>
-                        </div>
-                      )}
 
                       <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mt-4">
                         <p className="text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
                           <svg className="h-4 w-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                           </svg>
-                          <span>
-                            {productType === "yard_sign" 
-                              ? "Yard signs are available for USA addresses only."
-                              : "Stickers are available for USA, Canada, and UK addresses."}
-                          </span>
+                          <span>Stickers are available for USA, Canada, and UK addresses.</span>
                         </p>
                       </div>
 
@@ -909,3 +903,4 @@ export function OrderDialog({ open, onOpenChange, qrCodeId, initialProductType }
     </Dialog>
   );
 }
+

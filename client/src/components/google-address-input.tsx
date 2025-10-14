@@ -16,11 +16,13 @@ interface AddressComponents {
 interface GoogleAddressInputProps {
   onAddressSelect: (address: AddressComponents) => void;
   initialAddress?: AddressComponents;
+  showProfilePrefill?: boolean;
+  savedAddress?: string | null;
 }
 
 const libraries: ("places")[] = ["places"];
 
-export function GoogleAddressInput({ onAddressSelect, initialAddress }: GoogleAddressInputProps) {
+export function GoogleAddressInput({ onAddressSelect, initialAddress, showProfilePrefill = false, savedAddress }: GoogleAddressInputProps) {
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "",
     libraries,
@@ -139,8 +141,39 @@ export function GoogleAddressInput({ onAddressSelect, initialAddress }: GoogleAd
     );
   }
 
+  const handleUseSavedAddress = () => {
+    if (savedAddress) {
+      try {
+        const parsed = JSON.parse(savedAddress);
+        setFullName(parsed.fullName || '');
+        setAddress(parsed.address || '');
+        setCity(parsed.city || '');
+        setState(parsed.state || '');
+        setZipCode(parsed.zipCode || '');
+        setCountry(parsed.country || 'USA');
+        onAddressSelect(parsed);
+      } catch (e) {
+        console.error('Failed to parse saved address');
+      }
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {showProfilePrefill && savedAddress && (
+        <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+          <p className="text-sm text-blue-900 dark:text-blue-100 mb-2">
+            💡 We found a saved address in your profile
+          </p>
+          <button
+            type="button"
+            onClick={handleUseSavedAddress}
+            className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-semibold underline"
+          >
+            Use saved address
+          </button>
+        </div>
+      )}
       <div>
         <Label htmlFor="fullName">Full Name *</Label>
         <Input

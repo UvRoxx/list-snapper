@@ -2,6 +2,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, Link, useLocation } from "wouter";
 import { Navigation } from "@/components/navigation";
 import { ProtectedRoute } from "@/components/protected-route";
+import { OrderDialog } from "@/components/order-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -63,6 +64,7 @@ export default function QrDetail() {
   const [newBgColor, setNewBgColor] = useState("");
   const [copiedShortCode, setCopiedShortCode] = useState(false);
   const [copiedFullUrl, setCopiedFullUrl] = useState(false);
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
 
   const hasAnalyticsAccess = user?.membership?.tierName === 'STANDARD' || user?.membership?.tierName === 'PRO';
 
@@ -241,13 +243,15 @@ export default function QrDetail() {
       <div className="min-h-screen bg-muted/30">
         <Navigation />
         
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <Link href="/dashboard">
-            <Button variant="ghost" className="mb-6" data-testid="button-back-dashboard">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Dashboard
-            </Button>
-          </Link>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="sticky top-16 z-10 bg-muted/95 backdrop-blur-sm -mx-4 px-4 py-2 mb-4">
+              <Link href="/dashboard">
+                <Button variant="ghost" data-testid="button-back-dashboard">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back to Dashboard
+                </Button>
+              </Link>
+            </div>
 
           <div className="grid lg:grid-cols-3 gap-6">
             {/* Left Column - QR Code */}
@@ -374,18 +378,10 @@ export default function QrDetail() {
                   <Button 
                     className="w-full" 
                     variant="default"
-                    onClick={() => setLocation(`/orders?qrId=${id}&type=sticker`)}
+                    onClick={() => setOrderDialogOpen(true)}
                     data-testid="button-order-stickers"
                   >
                     Order Stickers
-                  </Button>
-                  <Button 
-                    className="w-full" 
-                    variant="default"
-                    onClick={() => setLocation(`/orders?qrId=${id}&type=yard_sign`)}
-                    data-testid="button-order-signs"
-                  >
-                    Order Yard Signs
                   </Button>
                 </CardContent>
               </Card>
@@ -544,7 +540,7 @@ export default function QrDetail() {
                         Analytics Overview
                       </CardTitle>
                       <Link href="/analytics">
-                        <Button variant="outline" size="sm" data-testid="button-view-full-analytics">
+                        <Button variant="outline" size="sm" className="text-green-600 hover:text-green-700 border-green-600 hover:border-green-700 hover:bg-green-50 dark:hover:bg-green-950" data-testid="button-view-full-analytics">
                           View Full Analytics
                         </Button>
                       </Link>
@@ -802,6 +798,14 @@ export default function QrDetail() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Order Dialog Modal */}
+        <OrderDialog
+          open={orderDialogOpen}
+          onOpenChange={setOrderDialogOpen}
+          qrCodeId={id || null}
+          initialProductType="sticker"
+        />
       </div>
     </ProtectedRoute>
   );

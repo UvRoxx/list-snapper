@@ -22,6 +22,8 @@ import CheckoutCart from "@/pages/checkout-cart";
 import Settings from "@/pages/settings";
 import Checkout from "@/pages/checkout";
 import AdminDashboard from "@/pages/admin";
+import FAQ from "@/pages/faq";
+import BrandedRedirect from "@/pages/branded-redirect";
 
 function Router() {
   return (
@@ -40,6 +42,8 @@ function Router() {
       <Route path="/settings" component={Settings} />
       <Route path="/checkout/:tier" component={Checkout} />
       <Route path="/admin" component={AdminDashboard} />
+      <Route path="/faq" component={FAQ} />
+      <Route path="/r/:shortCode" component={BrandedRedirect} />
       <Route component={NotFound} />
     </Switch>
   );

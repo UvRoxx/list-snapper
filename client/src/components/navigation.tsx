@@ -80,6 +80,12 @@ export function Navigation() {
                   >
                     {t('dashboard')}
                   </Link>
+                  <Link 
+                    href="/faq" 
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Help
+                  </Link>
                   {user.isAdmin && (
                     <Link 
                       href="/admin" 
