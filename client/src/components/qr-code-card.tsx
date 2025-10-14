@@ -203,23 +203,6 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
               View Details
             </Button>
           </Link>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  onClick={() => toggleActiveMutation.mutate({ id: qrCode.id, isActive: !qrCode.isActive })}
-                  data-testid="button-toggle-active"
-                >
-                  <Power className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{qrCode.isActive ? 'Deactivate' : 'Activate'}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
           
           <TooltipProvider>
             <Tooltip>
@@ -254,6 +237,24 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
               </Tooltip>
             </TooltipProvider>
           </Link>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline"
+                  size="sm"
+                  onClick={() => toggleActiveMutation.mutate({ id: qrCode.id, isActive: !qrCode.isActive })}
+                  data-testid="button-toggle-active"
+                >
+                  <Power className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{qrCode.isActive ? 'Deactivate' : 'Activate'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           <TooltipProvider>
             <Tooltip>
