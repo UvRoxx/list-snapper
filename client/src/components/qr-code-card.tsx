@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { OrderDialog } from "./order-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,7 @@ import {
 } from "@/components/ui/tooltip";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, Download, Trash, BarChart3, Calendar, ExternalLink, Power } from "lucide-react";
+import { Eye, Download, Trash, BarChart3, Calendar, ExternalLink, Power, Package } from "lucide-react";
 import QRCode from "qrcode";
 
 interface QrCodeCardProps {
@@ -34,6 +35,7 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
   const queryClient = useQueryClient();
   const [isDownloading, setIsDownloading] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
 
   // Generate QR code preview with custom colors
   useEffect(() => {
@@ -140,6 +142,7 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
   };
 
   return (
+    <>
     <Card className="hover:shadow-lg transition-shadow group" data-testid={`card-qr-${qrCode.id}`}>
       <CardContent className="p-6">
         <div className="flex items-start justify-between mb-4">
@@ -197,12 +200,22 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          <Link href={`/qr/${qrCode.id}`} className="col-span-2">
+          <Link href={`/qr/${qrCode.id}`}>
             <Button variant="default" className="w-full" data-testid="button-view-qr">
               <Eye className="h-4 w-4 mr-2" />
               View Details
             </Button>
           </Link>
+          
+          <Button 
+            variant="default" 
+            className="w-full bg-green-600 hover:bg-green-700"
+            onClick={() => setOrderDialogOpen(true)}
+            data-testid="button-order-stickers-card"
+          >
+            <Package className="h-4 w-4 mr-2" />
+            Order Stickers
+          </Button>
           
           <TooltipProvider>
             <Tooltip>
@@ -277,5 +290,14 @@ export function QrCodeCard({ qrCode }: QrCodeCardProps) {
         </div>
       </CardContent>
     </Card>
+    
+    {/* Order Dialog */}
+    <OrderDialog
+      open={orderDialogOpen}
+      onOpenChange={setOrderDialogOpen}
+      qrCodeId={qrCode.id}
+      initialProductType="sticker"
+    />
+    </>
   );
 }
