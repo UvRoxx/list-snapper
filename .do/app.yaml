@@ -14,7 +14,7 @@ services:
   - name: web
     # Source code
     github:
-      repo: your-github-username/SnapList
+      repo: UvRoxx/list-snapper
       branch: main
       deploy_on_push: true
     
