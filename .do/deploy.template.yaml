@@ -1,0 +1,125 @@
+# Digital Ocean App Platform Configuration Template
+# Copy this to app.yaml and customize for your deployment
+
+name: snaplist
+region: nyc  # Options: nyc (New York), sfo (San Francisco), ams (Amsterdam), sgp (Singapore), lon (London), fra (Frankfurt), tor (Toronto), blr (Bangalore)
+
+# PostgreSQL Database
+databases:
+  - name: snaplist-db
+    engine: PG
+    version: "16"
+    production: true
+    cluster_name: snaplist-db-cluster
+    # size: db-s-1vcpu-1gb  # Uncomment to specify database size
+
+# Main Application Service
+services:
+  - name: web
+    # GitHub Integration
+    github:
+      repo: YOUR_GITHUB_USERNAME/SnapList  # CHANGE THIS
+      branch: main
+      deploy_on_push: true
+    
+    # Build Configuration
+    build_command: npm install && npm run build
+    run_command: npm start
+    
+    # Runtime Environment
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: basic-xxs  # Options: basic-xxs, basic-xs, basic-s, professional-xs, etc.
+    
+    # HTTP Configuration
+    http_port: 5000
+    
+    # Health Check (optional but recommended)
+    health_check:
+      http_path: /api/health
+      initial_delay_seconds: 60
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+    
+    # Environment Variables
+    envs:
+      # === Auto-injected by Digital Ocean ===
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+        value: ${snaplist-db.DATABASE_URL}
+      
+      # === Basic Configuration ===
+      - key: NODE_ENV
+        scope: RUN_AND_BUILD_TIME
+        value: production
+      
+      - key: PORT
+        scope: RUN_TIME
+        value: "5000"
+      
+      # === Security Secrets (REQUIRED - Set in DO Dashboard) ===
+      - key: JWT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      
+      - key: SESSION_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      
+      # === Stripe Configuration (REQUIRED) ===
+      - key: STRIPE_SECRET_KEY
+        scope: RUN_TIME
+        type: SECRET
+        # Get from: https://dashboard.stripe.com/apikeys
+      
+      - key: STRIPE_PUBLISHABLE_KEY
+        scope: RUN_AND_BUILD_TIME
+        value: pk_test_YOUR_KEY
+      
+      - key: VITE_STRIPE_PUBLIC_KEY
+        scope: BUILD_TIME
+        value: pk_test_YOUR_KEY
+      
+      - key: STRIPE_STANDARD_PRICE_ID
+        scope: RUN_TIME
+        value: price_YOUR_STANDARD_PRICE_ID
+      
+      - key: STRIPE_PRO_PRICE_ID
+        scope: RUN_TIME
+        value: price_YOUR_PRO_PRICE_ID
+      
+      - key: STRIPE_WEBHOOK_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        # Get from: https://dashboard.stripe.com/webhooks
+      
+      # === OAuth Configuration (OPTIONAL) ===
+      - key: GOOGLE_CLIENT_ID
+        scope: RUN_TIME
+        type: SECRET
+        # Get from: https://console.cloud.google.com/
+      
+      - key: GOOGLE_CLIENT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      
+      - key: FACEBOOK_APP_ID
+        scope: RUN_TIME
+        type: SECRET
+        # Get from: https://developers.facebook.com/
+      
+      - key: FACEBOOK_APP_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      
+      # === Google Maps (OPTIONAL) ===
+      - key: VITE_GOOGLE_MAPS_API_KEY
+        scope: BUILD_TIME
+        type: SECRET
+        # Get from: https://console.cloud.google.com/google/maps-apis/
+
