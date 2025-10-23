@@ -60,7 +60,7 @@ app.use((req, res, next) => {
 (async () => {
   // Seed membership tiers on startup
   await seedMembershipTiers();
-  
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

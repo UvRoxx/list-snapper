@@ -3,22 +3,61 @@ import { Navigation } from "@/components/navigation";
 import { DashboardPreview } from "@/components/dashboard-preview";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
-import { 
-  ChartLine, 
-  Palette, 
-  RotateCcw, 
-  Printer, 
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import {
+  ChartLine,
+  Palette,
+  RotateCcw,
+  Printer,
   Shield,
   Sparkles,
   Check,
-  Zap
+  Zap,
+  Mail
 } from "lucide-react";
 
 export default function Landing() {
   const { t } = useTranslation('common');
-  
+  const { toast } = useToast();
+  const [email, setEmail] = useState("");
+
+  const newsletterMutation = useMutation({
+    mutationFn: async (email: string) => {
+      return apiRequest("/api/newsletter/subscribe", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Subscribed!",
+        description: "Thank you for subscribing to our newsletter.",
+      });
+      setEmail("");
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to subscribe. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleNewsletterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (email) {
+      newsletterMutation.mutate(email);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -177,6 +216,52 @@ export default function Landing() {
       </section>
 
       {/* Footer */}
+      {/* Newsletter Section */}
+      <section className="py-20 bg-gradient-to-br from-purple-50 via-white to-pink-50">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            className="text-center"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-primary/10 rounded-full mb-6">
+              <Mail className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium">Newsletter</span>
+            </div>
+            <h2 className="text-4xl font-bold mb-4">
+              Stay Updated
+            </h2>
+            <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+              Subscribe to our newsletter for the latest updates, features, and special offers.
+            </p>
+            <form onSubmit={handleNewsletterSubmit} className="max-w-md mx-auto">
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="flex-1"
+                />
+                <Button
+                  type="submit"
+                  disabled={newsletterMutation.isPending}
+                  className="px-8"
+                >
+                  {newsletterMutation.isPending ? "Subscribing..." : "Subscribe"}
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground mt-4">
+                We respect your privacy. Unsubscribe at any time.
+              </p>
+            </form>
+          </motion.div>
+        </div>
+      </section>
+
       <footer className="bg-card border-t border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="grid md:grid-cols-4 gap-8">

@@ -12,7 +12,10 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { Strategy as FacebookStrategy } from "passport-facebook";
 import { storage } from "./storage";
 import { storage as cartStorage } from "./cart";
-import { insertUserSchema, loginSchema, insertQrCodeSchema, insertOrderSchema, insertCartItemSchema } from "@shared/schema";
+import { sendOrderStatusEmail, sendNewsletterConfirmation } from "./email-simple";
+import { generateOrderPDF, generateDeliveryLabelPDF } from "./pdf-generator";
+import { generateOrderZIP, generateBulkOrdersZIP } from "./zip-generator";
+import { insertUserSchema, loginSchema, insertQrCodeSchema, insertOrderSchema, insertCartItemSchema, insertAdminSettingSchema, insertNewsletterSubscriberSchema } from "@shared/schema";
 import { z } from "zod";
 
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -1361,11 +1364,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/stats", authenticateToken, authenticateAdmin, async (req, res) => {
+  app.get("/api/admin/stats", authenticateToken, authenticateAdmin, async (req: any, res) => {
     try {
+      console.log('Admin stats requested by user:', req.user?.userId);
       const stats = await storage.getPlatformStats();
+      console.log('Sending stats:', stats);
       res.json(stats);
     } catch (error: any) {
+      console.error('Error fetching stats:', error);
       res.status(500).json({ message: error.message });
     }
   });
@@ -1397,8 +1403,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const updates = req.body;
       const order = await storage.updateOrder(id, updates);
+
+      // Send email notification if status changed
+      if (updates.status && order.userEmail) {
+        await sendOrderStatusEmail(
+          order.userEmail,
+          order.id.slice(0, 8).toUpperCase(),
+          updates.status,
+          order.userName
+        );
+      }
+
       res.json(order);
     } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Admin Settings Routes
+  app.get("/api/admin/settings", authenticateToken, authenticateAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getAllSettings();
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/admin/settings", authenticateToken, authenticateAdmin, async (req, res) => {
+    try {
+      const { settings } = req.body;
+      for (const setting of settings) {
+        await storage.upsertSetting(setting.key, setting.value, setting.category, setting.description);
+      }
+      res.json({ message: "Settings updated successfully" });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Newsletter Routes
+  app.post("/api/newsletter/subscribe", async (req, res) => {
+    try {
+      const { email } = insertNewsletterSubscriberSchema.parse(req.body);
+      await storage.addNewsletterSubscriber(email);
+      await sendNewsletterConfirmation(email);
+      res.json({ message: "Successfully subscribed to newsletter" });
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  // PDF Generation Routes
+  app.get("/api/admin/orders/:id/pdf", authenticateToken, authenticateAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const pdfBuffer = await generateOrderPDF(id);
+
+      const order = await storage.getOrder(id);
+      const orderNumber = order?.id.slice(0, 8).toUpperCase() || 'ORDER';
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="order-${orderNumber}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error: any) {
+      console.error('PDF generation error:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/orders/:id/label", authenticateToken, authenticateAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const pdfBuffer = await generateDeliveryLabelPDF(id);
+
+      const order = await storage.getOrder(id);
+      const orderNumber = order?.id.slice(0, 8).toUpperCase() || 'LABEL';
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="label-${orderNumber}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error: any) {
+      console.error('Label generation error:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/admin/orders/:id/zip", authenticateToken, authenticateAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const zipBuffer = await generateOrderZIP(id);
+
+      const order = await storage.getOrder(id);
+      const orderNumber = order?.id.slice(0, 8).toUpperCase() || 'ORDER';
+
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="order-${orderNumber}.zip"`);
+      res.send(zipBuffer);
+    } catch (error: any) {
+      console.error('ZIP generation error:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Bulk export pending orders as ZIP
+  app.post("/api/admin/orders/bulk-export", authenticateToken, authenticateAdmin, async (req, res) => {
+    try {
+      const { orderIds } = req.body;
+
+      if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+        return res.status(400).json({ message: "No orders selected" });
+      }
+
+      const zipBuffer = await generateBulkOrdersZIP(orderIds);
+
+      const timestamp = new Date().toISOString().split('T')[0];
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="orders-${timestamp}.zip"`);
+      res.send(zipBuffer);
+    } catch (error: any) {
+      console.error('Bulk export error:', error);
       res.status(500).json({ message: error.message });
     }
   });

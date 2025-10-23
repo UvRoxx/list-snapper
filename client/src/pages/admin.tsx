@@ -7,13 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Users, 
-  QrCode, 
-  ShoppingCart, 
-  DollarSign, 
-  Trash2, 
-  TrendingUp, 
+import {
+  Users,
+  QrCode,
+  ShoppingCart,
+  DollarSign,
+  Trash2,
+  TrendingUp,
   Activity,
   Package,
   Eye,
@@ -21,7 +21,11 @@ import {
   Download,
   MoreVertical,
   UserCheck,
-  AlertCircle
+  AlertCircle,
+  Settings,
+  FileText,
+  Archive,
+  Tag
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -58,6 +62,8 @@ type User = {
   firstName: string;
   lastName: string;
   company: string;
+  country: string | null;
+  language: string | null;
   isAdmin: boolean;
   membershipTier: string;
   createdAt: string;
@@ -94,23 +100,34 @@ type PlatformStats = {
 
 export default function AdminDashboard() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const [orderToUpdate, setOrderToUpdate] = useState<{ id: string; status: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [countryFilter, setCountryFilter] = useState<string>("all");
+  const [languageFilter, setLanguageFilter] = useState<string>("all");
 
   useEffect(() => {
-    if (user && !user.isAdmin) {
-      toast({
-        title: "Access Denied",
-        description: "You do not have admin privileges to access this page.",
-        variant: "destructive",
-      });
-      setLocation("/dashboard");
+    if (!authLoading) {
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please login to access the admin panel.",
+          variant: "destructive",
+        });
+        setLocation("/login");
+      } else if (!user.isAdmin) {
+        toast({
+          title: "Access Denied",
+          description: "You do not have admin privileges to access this page.",
+          variant: "destructive",
+        });
+        setLocation("/dashboard");
+      }
     }
-  }, [user, setLocation, toast]);
+  }, [user, authLoading, setLocation, toast]);
 
   const { data: stats, isLoading: statsLoading } = useQuery<PlatformStats>({
     queryKey: ['/api/admin/stats'],
@@ -161,20 +178,39 @@ export default function AdminDashboard() {
   // Filters
   const filteredUsers = useMemo(() => {
     return users.filter(user => {
-      const matchesSearch = 
+      const matchesSearch =
         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (user.company || '').toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesFilter = 
+
+      const matchesStatusFilter =
         statusFilter === "all" ||
         (statusFilter === "admin" && user.isAdmin) ||
         (statusFilter === "paid" && user.membershipTier !== "FREE") ||
         (statusFilter === "free" && user.membershipTier === "FREE");
 
-      return matchesSearch && matchesFilter;
+      const matchesCountryFilter =
+        countryFilter === "all" ||
+        user.country === countryFilter;
+
+      const matchesLanguageFilter =
+        languageFilter === "all" ||
+        user.language === languageFilter;
+
+      return matchesSearch && matchesStatusFilter && matchesCountryFilter && matchesLanguageFilter;
     });
-  }, [users, searchTerm, statusFilter]);
+  }, [users, searchTerm, statusFilter, countryFilter, languageFilter]);
+
+  // Get unique countries and languages for filter options
+  const availableCountries = useMemo(() => {
+    const countries = new Set(users.map(u => u.country).filter(Boolean));
+    return Array.from(countries).sort();
+  }, [users]);
+
+  const availableLanguages = useMemo(() => {
+    const languages = new Set(users.map(u => u.language).filter(Boolean));
+    return Array.from(languages).sort();
+  }, [users]);
 
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
@@ -244,6 +280,35 @@ export default function AdminDashboard() {
     return colors[status] || "bg-gray-500";
   };
 
+  // Check auth first - prevent loading data if not authenticated
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="container mx-auto p-6">
+          <div className="flex items-center justify-center h-96">
+            <div className="text-muted-foreground">Checking authentication...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user || !user.isAdmin) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="container mx-auto p-6">
+          <div className="flex items-center justify-center h-96">
+            <div className="text-destructive">
+              {!user ? "Please login to access the admin panel" : "Admin privileges required"}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (statsLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -273,6 +338,14 @@ export default function AdminDashboard() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLocation("/admin/settings")}
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
+            </Button>
             <Button variant="outline" size="sm">
               <Download className="h-4 w-4 mr-2" />
               Export Data
@@ -499,27 +572,57 @@ export default function AdminDashboard() {
                     {filteredUsers.length} users
                   </Badge>
                 </div>
-                <div className="flex gap-4 mt-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search users..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
+                <div className="flex flex-col gap-4 mt-4">
+                  <div className="flex gap-4">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search users..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="w-40">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Users</SelectItem>
+                        <SelectItem value="admin">Admins</SelectItem>
+                        <SelectItem value="paid">Paid Plans</SelectItem>
+                        <SelectItem value="free">Free Tier</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Users</SelectItem>
-                      <SelectItem value="admin">Admins</SelectItem>
-                      <SelectItem value="paid">Paid Plans</SelectItem>
-                      <SelectItem value="free">Free Tier</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-4">
+                    <Select value={countryFilter} onValueChange={setCountryFilter}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="All Countries" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Countries</SelectItem>
+                        {availableCountries.map(country => (
+                          <SelectItem key={country} value={country}>
+                            {country}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={languageFilter} onValueChange={setLanguageFilter}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="All Languages" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Languages</SelectItem>
+                        {availableLanguages.map(language => (
+                          <SelectItem key={language} value={language}>
+                            {language === 'en' ? 'English' : language === 'fr' ? 'French' : language}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -695,32 +798,55 @@ export default function AdminDashboard() {
                     </p>
                   </div>
                   <Button
-                    onClick={() => {
+                    onClick={async () => {
                       const pending = orders.filter(o => o.status === 'pending' || o.status === 'processing');
-                      const csv = [
-                        ['Order ID', 'Customer Email', 'QR Code Name', 'Product', 'Quantity', 'Size', 'Shipping Address', 'Date'].join(','),
-                        ...pending.map(o => [
-                          `"${o.id.slice(0, 8)}"`,
-                          `"${o.userEmail}"`,
-                          `"${o.qrCodeName}"`,
-                          '"Sticker"',
-                          o.quantity,
-                          `"${(o as any).size || 'N/A'}"`,
-                          `"${(o as any).shippingAddress || 'N/A'}"`,
-                          `"${new Date(o.createdAt).toLocaleDateString()}"`
-                        ].join(','))
-                      ].join('\n');
-                      const blob = new Blob([csv], { type: 'text/csv' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `fulfillment-list-${new Date().toISOString().split('T')[0]}.csv`;
-                      a.click();
-                      URL.revokeObjectURL(url);
+                      const orderIds = pending.map(o => o.id);
+
+                      if (orderIds.length === 0) {
+                        toast({
+                          title: "No Orders",
+                          description: "There are no pending orders to export.",
+                          variant: "destructive"
+                        });
+                        return;
+                      }
+
+                      try {
+                        const response = await fetch('/api/admin/orders/bulk-export', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({ orderIds }),
+                        });
+
+                        if (!response.ok) {
+                          throw new Error('Failed to generate ZIP');
+                        }
+
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `orders-${new Date().toISOString().split('T')[0]}.zip`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+
+                        toast({
+                          title: "Export Complete",
+                          description: `Successfully exported ${orderIds.length} orders`,
+                        });
+                      } catch (error) {
+                        toast({
+                          title: "Export Failed",
+                          description: "Failed to generate order export. Please try again.",
+                          variant: "destructive"
+                        });
+                      }
                     }}
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
-                    📄 Export Fulfillment List (CSV)
+                    📦 Export Pending Orders (ZIP)
                   </Button>
                 </div>
               </CardContent>
@@ -819,14 +945,48 @@ export default function AdminDashboard() {
                               {format(new Date(order.createdAt), 'MMM dd, yyyy')}
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setOrderToUpdate({ id: order.id, status: order.status })}
-                                data-testid={`button-update-order-${order.id}`}
-                              >
-                                Update
-                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => setOrderToUpdate({ id: order.id, status: order.status })}
+                                    data-testid={`button-update-order-${order.id}`}
+                                  >
+                                    <Package className="h-4 w-4 mr-2" />
+                                    Update Status
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      window.open(`/api/admin/orders/${order.id}/pdf`, '_blank');
+                                    }}
+                                  >
+                                    <FileText className="h-4 w-4 mr-2" />
+                                    Download PDF
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      window.open(`/api/admin/orders/${order.id}/zip`, '_blank');
+                                    }}
+                                  >
+                                    <Archive className="h-4 w-4 mr-2" />
+                                    Download ZIP
+                                  </DropdownMenuItem>
+                                  {order.quantity > 10 && (
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        window.open(`/api/admin/orders/${order.id}/label`, '_blank');
+                                      }}
+                                    >
+                                      <Tag className="h-4 w-4 mr-2" />
+                                      Delivery Label
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                           </TableRow>
                         ))}

@@ -1,13 +1,15 @@
-import { 
-  users, 
-  qrCodes, 
+import {
+  users,
+  qrCodes,
   qrCodeScans,
   qrCodeUrlHistory,
   orders,
   membershipTiers,
   userMemberships,
   orderStatusHistory,
-  type User, 
+  adminSettings,
+  newsletterSubscribers,
+  type User,
   type InsertUser,
   type QrCode,
   type InsertQrCode,
@@ -16,7 +18,9 @@ import {
   type Order,
   type InsertOrder,
   type MembershipTier,
-  type UserMembership
+  type UserMembership,
+  type AdminSetting,
+  type NewsletterSubscriber
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, count } from "drizzle-orm";
@@ -77,6 +81,15 @@ export interface IStorage {
   }>;
   updateUser(id: string, updates: Partial<User>): Promise<User>;
   deleteUser(id: string): Promise<void>;
+
+  // Admin Settings methods
+  getAllSettings(): Promise<any[]>;
+  getSetting(key: string): Promise<any | undefined>;
+  upsertSetting(key: string, value: string, category: string, description?: string): Promise<any>;
+
+  // Newsletter methods
+  addNewsletterSubscriber(email: string): Promise<void>;
+  getNewsletterSubscribers(): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -544,6 +557,13 @@ export class DatabaseStorage implements IStorage {
     const [scanCount] = await db.select({ count: count() }).from(qrCodeScans);
     const [orderCount] = await db.select({ count: count() }).from(orders);
 
+    console.log('Platform Stats:', {
+      userCount: userCount?.count,
+      qrCodeCount: qrCodeCount?.count,
+      scanCount: scanCount?.count,
+      orderCount: orderCount?.count
+    });
+
     const firstDayOfMonth = new Date();
     firstDayOfMonth.setDate(1);
     firstDayOfMonth.setHours(0, 0, 0, 0);
@@ -582,6 +602,50 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUser(id: string): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  // Admin Settings methods
+  async getAllSettings(): Promise<AdminSetting[]> {
+    return await db.select().from(adminSettings);
+  }
+
+  async getSetting(key: string): Promise<AdminSetting | undefined> {
+    const [setting] = await db.select().from(adminSettings).where(eq(adminSettings.key, key));
+    return setting || undefined;
+  }
+
+  async upsertSetting(key: string, value: string, category: string, description?: string): Promise<AdminSetting> {
+    const existing = await this.getSetting(key);
+
+    if (existing) {
+      const [updated] = await db
+        .update(adminSettings)
+        .set({ value, category, description, updatedAt: new Date() })
+        .where(eq(adminSettings.key, key))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(adminSettings)
+        .values({ key, value, category, description })
+        .returning();
+      return created;
+    }
+  }
+
+  // Newsletter methods
+  async addNewsletterSubscriber(email: string): Promise<void> {
+    await db
+      .insert(newsletterSubscribers)
+      .values({ email })
+      .onConflictDoNothing();
+  }
+
+  async getNewsletterSubscribers(): Promise<NewsletterSubscriber[]> {
+    return await db
+      .select()
+      .from(newsletterSubscribers)
+      .where(eq(newsletterSubscribers.isActive, true));
   }
 }
 
