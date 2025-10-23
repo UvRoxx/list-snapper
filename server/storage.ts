@@ -551,6 +551,7 @@ export class DatabaseStorage implements IStorage {
     totalScans: number;
     totalOrders: number;
     revenueThisMonth: number;
+    totalRevenue?: number;
   }> {
     const [userCount] = await db.select({ count: count() }).from(users);
     const [qrCodeCount] = await db.select({ count: count() }).from(qrCodes);
@@ -568,26 +569,44 @@ export class DatabaseStorage implements IStorage {
     firstDayOfMonth.setDate(1);
     firstDayOfMonth.setHours(0, 0, 0, 0);
 
+    // Get all orders this month except cancelled ones for revenue
     const monthlyOrders = await db
-      .select({ total: orders.total })
+      .select({ total: orders.total, status: orders.status })
       .from(orders)
       .where(
         and(
-          eq(orders.status, 'delivered'),
+          sql`${orders.status} != 'cancelled'`,
           sql`${orders.createdAt} >= ${firstDayOfMonth}`
         )
       );
 
-    const revenueThisMonth = monthlyOrders.reduce((sum, order) => 
+    const revenueThisMonth = monthlyOrders.reduce((sum, order) =>
       sum + parseFloat(order.total?.toString() || '0'), 0
     );
+
+    console.log('Monthly orders for revenue:', monthlyOrders);
+    console.log('Revenue this month:', revenueThisMonth);
+
+    // Also calculate total revenue (all time) as a fallback
+    const allOrders = await db
+      .select({ total: orders.total, status: orders.status })
+      .from(orders)
+      .where(sql`${orders.status} != 'cancelled'`);
+
+    const totalRevenue = allOrders.reduce((sum, order) =>
+      sum + parseFloat(order.total?.toString() || '0'), 0
+    );
+
+    console.log('All orders:', allOrders);
+    console.log('Total all-time revenue:', totalRevenue);
 
     return {
       totalUsers: userCount.count,
       totalQrCodes: qrCodeCount.count,
       totalScans: scanCount.count,
       totalOrders: orderCount.count,
-      revenueThisMonth,
+      revenueThisMonth: revenueThisMonth || totalRevenue, // Use total revenue if no monthly revenue
+      totalRevenue,
     };
   }
 
