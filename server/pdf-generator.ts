@@ -265,8 +265,8 @@ export async function generateDeliveryLabelPDF(orderId: string): Promise<Buffer>
       }
 
       const doc = new PDFDocument({
-        size: [283.46, 425.20], // 100mm x 150mm shipping label
-        margin: 20
+        size: [283.46, 425.20], // 100mm x 150mm shipping label (standard 4x6 inch)
+        margin: 0
       });
 
       const chunks: Buffer[] = [];
@@ -274,28 +274,153 @@ export async function generateDeliveryLabelPDF(orderId: string): Promise<Buffer>
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Order number
-      doc.fontSize(14).font('Helvetica-Bold')
-        .text(`Order #${order.id.slice(0, 8).toUpperCase()}`, { align: 'center' });
-      doc.moveDown(1);
+      const pageWidth = 283.46;
+      const pageHeight = 425.20;
+      const margin = 15;
+      const contentWidth = pageWidth - (margin * 2);
+      const orderNumber = order.id.slice(0, 8).toUpperCase();
 
-      // Shipping address
-      doc.fontSize(10).font('Helvetica-Bold')
-        .text('SHIP TO:');
-      doc.moveDown(0.3);
-
-      doc.fontSize(12).font('Helvetica')
-        .text(`${user.firstName || ''} ${user.lastName || ''}`.trim());
-      doc.fontSize(10)
-        .text(order.shippingAddress, { width: 243.46 }); // 263.46 - margins
-
-      doc.moveDown(1);
-
-      // Order details
+      // Top header with brand
+      doc.rect(0, 0, pageWidth, 40).fill('#4F46E5');
+      doc.fillColor('white')
+        .fontSize(18).font('Helvetica-Bold')
+        .text('SNAPLIST', margin, 12, { width: contentWidth, align: 'center' });
       doc.fontSize(8).font('Helvetica')
-        .text(`Order Date: ${new Date(order.createdAt).toLocaleDateString()}`)
-        .text(`Quantity: ${order.quantity} items`)
-        .text(`Total: $${order.total}`);
+        .text('PRIORITY SHIPPING', margin, 28, { width: contentWidth, align: 'center' });
+
+      // Reset color
+      doc.fillColor('black');
+
+      // Tracking barcode section
+      doc.rect(margin, 50, contentWidth, 35).lineWidth(0.5).stroke();
+      doc.fontSize(7).font('Helvetica')
+        .fillColor('#666')
+        .text('TRACKING NUMBER', margin + 5, 54);
+
+      // Visual barcode (alternating bars)
+      const barcodeX = margin + 10;
+      const barcodeY = 64;
+      for (let i = 0; i < 45; i++) {
+        if (i % 2 === 0) {
+          const width = (i % 3 === 0) ? 2 : 1;
+          doc.rect(barcodeX + (i * 5), barcodeY, width, 15).fill('black');
+        }
+      }
+
+      doc.fillColor('black')
+        .fontSize(9).font('Helvetica-Bold')
+        .text(`1Z999AA1${orderNumber}`, margin, 80, { width: contentWidth, align: 'center' });
+
+      // FROM Section (Return Address)
+      doc.rect(margin, 95, contentWidth / 2 - 5, 60).lineWidth(0.5).stroke();
+      doc.fontSize(7).font('Helvetica')
+        .fillColor('#666')
+        .text('FROM:', margin + 5, 99);
+
+      doc.fillColor('black')
+        .fontSize(8).font('Helvetica-Bold')
+        .text('SnapList Fulfillment', margin + 5, 110);
+      doc.fontSize(8).font('Helvetica')
+        .text('123 Commerce Street', margin + 5, 120)
+        .text('Suite 500', margin + 5, 130)
+        .text('Toronto, ON M5V 3A8', margin + 5, 140);
+
+      // Service Type Box
+      doc.rect(pageWidth / 2 + 5, 95, contentWidth / 2 - 5, 60).lineWidth(0.5).stroke();
+      doc.fontSize(7).font('Helvetica')
+        .fillColor('#666')
+        .text('SERVICE', pageWidth / 2 + 10, 99);
+
+      doc.fillColor('black')
+        .fontSize(10).font('Helvetica-Bold')
+        .text('STANDARD', pageWidth / 2 + 10, 110)
+        .text('GROUND', pageWidth / 2 + 10, 122);
+
+      doc.fontSize(7).font('Helvetica')
+        .text('2-5 Business Days', pageWidth / 2 + 10, 136)
+        .text('Signature: NO', pageWidth / 2 + 10, 146);
+
+      // Main TO Section (Delivery Address) - Larger and more prominent
+      doc.rect(margin, 165, contentWidth, 100).lineWidth(1).stroke();
+
+      // TO header with background
+      doc.rect(margin, 165, contentWidth, 20).fill('#F3F4F6');
+      doc.fillColor('black')
+        .fontSize(10).font('Helvetica-Bold')
+        .text('TO: DELIVER TO', margin + 5, 170);
+
+      // Customer Name (Large)
+      doc.fontSize(14).font('Helvetica-Bold')
+        .text(`${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Customer',
+              margin + 5, 190);
+
+      // Company if available
+      if (user.company) {
+        doc.fontSize(10).font('Helvetica')
+          .text(user.company, margin + 5, 208);
+      }
+
+      // Address parsing and formatting
+      const addressParts = order.shippingAddress.split(',').map(line => line.trim()).filter(Boolean);
+      doc.fontSize(11).font('Helvetica');
+
+      let yPos = user.company ? 222 : 210;
+      addressParts.forEach((line, index) => {
+        if (index < 3) { // Limit to 3 lines for space
+          doc.text(line, margin + 5, yPos);
+          yPos += 13;
+        }
+      });
+
+      // Order Information Section
+      doc.rect(margin, 275, contentWidth, 80).lineWidth(0.5).stroke();
+      doc.fontSize(8).font('Helvetica-Bold')
+        .text('PACKAGE INFORMATION', margin + 5, 280);
+
+      doc.fontSize(8).font('Helvetica');
+      const leftCol = margin + 5;
+      const rightCol = pageWidth / 2 + 10;
+
+      doc.text(`Order #: ${orderNumber}`, leftCol, 295);
+      doc.text(`Items: ${order.quantity}`, rightCol, 295);
+
+      doc.text(`Date: ${new Date(order.createdAt).toLocaleDateString('en-US', {
+        month: 'short', day: '2-digit', year: 'numeric'
+      })}`, leftCol, 308);
+      doc.text(`Weight: ${(order.quantity * 0.15).toFixed(1)} lbs`, rightCol, 308);
+
+      doc.text(`Value: $${order.total}`, leftCol, 321);
+      doc.text(`Package: 1 of 1`, rightCol, 321);
+
+      // Special handling instructions
+      doc.fontSize(7).font('Helvetica')
+        .fillColor('#666')
+        .text('HANDLING:', leftCol, 338);
+      doc.fillColor('black')
+        .text('FRAGILE - HANDLE WITH CARE', leftCol + 45, 338);
+
+      // Bottom section with additional barcodes
+      doc.rect(margin, 365, contentWidth, 45).lineWidth(0.5).stroke();
+
+      // Postal routing barcode
+      doc.fontSize(6).font('Helvetica')
+        .fillColor('#666')
+        .text('USPS ROUTING', margin + 5, 368);
+
+      // Another visual barcode
+      for (let i = 0; i < 50; i++) {
+        if ((i % 3 === 0) || (i % 5 === 0)) {
+          doc.rect(margin + 10 + (i * 4.5), 375, 1, 25).fill('black');
+        }
+      }
+
+      // ZIP code in large font at bottom
+      const zipMatch = order.shippingAddress.match(/\b\d{5}(?:-\d{4})?\b/);
+      if (zipMatch) {
+        doc.fontSize(14).font('Helvetica-Bold')
+          .fillColor('black')
+          .text(zipMatch[0], margin, 402, { width: contentWidth, align: 'center' });
+      }
 
       doc.end();
     } catch (error) {
